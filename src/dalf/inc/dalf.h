@@ -1,3 +1,17 @@
+/******************************************************************************
+*******************************************************************************
+**
+**
+**						dalf.h
+**		This is the dalf.h file of the Dalf-1F v1.73 firmware, modified
+**			for the ROVIM project.
+**		See Dalf-1F owner's manual and the ROVIM T2D documentation for more
+**			details.
+**
+**			The ROVIM Project
+********************************************************************************
+********************************************************************************/
+
 //xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 //                                                                            x
 //           D D          AA       L         FFFFFF      H    H               x
@@ -24,7 +38,7 @@
 
 // Logic
 #define	FALSE	0x00
-#define	TRUE	~FALSE
+#define	TRUE	~FALSE				// The truth is not out there, it is here...
 
 // ASCII Control Chrs
 #define	chr_STX		0x02			// Start of API Pkt[]
@@ -63,6 +77,8 @@
 typedef	unsigned char	BYTE, UCHAR;		//  8 bits; [0 .. 255]
 typedef	unsigned int	WORD, UINT, USHORT;	// 16 bits; [0 .. 65,535]
 typedef	unsigned long	DOUBLE, ULONG;		// 32 bits; [0 .. 4,294,967,295]
+typedef UCHAR BOOL;
+
 
 //-----------------------------------------------------------------------
 // 16-bit Timer1 runs at 32,768 Hz and is preloaded with 0x8000 in order to 
@@ -145,6 +161,18 @@ extern	void	DoIdle(void);			// Enter Low Power (IDLE) Mode
 extern	void	Mtr1FlagFix(void);		// Fixup after OvrCrnt handled by ISR
 extern	void	Mtr2FlagFix(void);		// Fixup after OvrCrnt handled by ISR
 
+
+////////////////////////////////////////////////////////////////////////////////
+//                E X T E N D E D     F U N C T I O N S                       //
+//                                                                            //
+//              System functions used because of the ROVIM Project.           //
+////////////////////////////////////////////////////////////////////////////////
+
+void InitWatchdog(void);
+void ServiceIO(void);
+BYTE TeCmdDispatchExt(void);
+BYTE I2C2CmdDispatchExt(void);
+BYTE Help(void);
 
 
 // External switches used for pot control modes
@@ -431,8 +459,3 @@ extern	void	Mtr2FlagFix(void);		// Fixup after OvrCrnt handled by ISR
 #define	FORWARD		0x00	// Direction
 #define	REVERSE		0x01	// Direction
 #define	SPEEDZERO	0x00	// Speed
-
-
-
-
-

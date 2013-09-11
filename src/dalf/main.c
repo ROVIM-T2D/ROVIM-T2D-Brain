@@ -1,3 +1,19 @@
+/******************************************************************************
+*******************************************************************************
+**
+**
+**					main.c
+**
+**		This is the main.c file of the Dalf-1F v1.73 firmware, modified
+**		for the ROVIM project.
+**
+**		See Dalf-1F owner's manual and the ROVIM T2D documentation for more
+**		details.
+**
+**			The ROVIM Project
+********************************************************************************
+********************************************************************************/
+
 /*xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;xx                                                                          xx
@@ -49,9 +65,11 @@
 ;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 */
-#include	"p18f6722.h"	/* Microcontroller specific definitions */
-#include	"config.h"		/* Fuse Settings */
+#include	"p18f6722.h"						/* Microcontroller specific definitions */
+#include	"config.h"							/* Fuse Settings */
 #include	"dalf.h"
+#include	"rovim.h"							/* description and configuration of the ROVIM system */
+#include	"test.h"							/* testing and debugging features */
 #include	<stdio.h>
 
 /* Function Prototypes */
@@ -279,6 +297,8 @@ ULONG	grn2pattern;	// LED2: On/Off LED bit pattern
 ULONG	redpattern;		// LED3: On/Off LED bit pattern
 BYTE	ledcount;		// LED Service Counter
 
+// IO expander variables
+WORD	ioexpcount;
 // TIME variables
 TIME	Delay1;
 
@@ -522,10 +542,14 @@ void	Greeting(void)
 	if(SCFG == TEcfg) 
 	{ // If Terminal Emulator Interface
 		printf("\r\n");
-		printf("Dalf-1%c\r\n", BOARD_ID);							// Hardware ID
-		printf("18F6722 Rev:%02X\r\n", (PIC_DEVID1 & 0x1F));		// Micro ID
-		printf("Software Ver:%2u.%02u\r\n",MAJOR_ID, MINOR_ID);		// Software ID
-		printf("User: %05u\r\n",USERID);							// User ID
+		printf("Microcontroller Board: Dalf-1%c\r\n", BOARD_ID);									// Hardware ID
+		printf("Microcontroller PIC: 18F6722 Rev:%02X\r\n", (PIC_DEVID1 & 0x1F));					// Micro ID
+		printf("Dalf User: %05u\r\n",USERID);														// User ID
+		printf("ROVIM T2D Brain\r\n");
+		printf("Dalf T2D Software Ver:%2u.%02u\r\n",MAJOR_ID, MINOR_ID);							// DALF Software ID
+		printf("ROVIM T2D Software Ver:%2u.%02u\r\n",ROVIM_T2D_SW_MAJOR_ID, ROVIM_T2D_SW_MINOR_ID);	// ROVIM Software ID
+		printf("ROVIM T2D Contact(s):\r\n%s\r\n", ROVIM_T2D_CONTACTS);								// ROVIM Contacts
+		printf("\r\n");
 	}
 }
 //-----------------------------------------------------------------------------
@@ -543,7 +567,7 @@ void	SerialCmdDispatch(void)
 		//-------------------------------------
 		else if (CmdSource == TE_SrcMsk)
 		{ // Terminal Emulator Interface
-			err = TeCmdDispatch();
+			err = TeCmdDispatchExt();
 			if (err)
 			{
 				if (err==eParseErr)	 	printf("Parse Err\r\n");
@@ -554,7 +578,7 @@ void	SerialCmdDispatch(void)
 			}
 		}
 		//-------------------------------------
-		else if (CmdSource == I2C2_SrcMsk)	err = I2C2CmdDispatch();
+		else if (CmdSource == I2C2_SrcMsk)	err = I2C2CmdDispatchExt();
 		//-------------------------------------
 
 		serialcmd=FALSE;		// reset flag
@@ -2648,6 +2672,7 @@ void Svc0(void)			// TMR0: Heartbeat (1msec)
 
 	// Conditionally service on-board LED's
 	ledcount--;	if(!ledcount) { ledcount=LED_PERIOD; ServiceLED(); }
+	ioexpcount--;if(!ioexpcount) { ioexpcount=IO_SAMPLE_PERIOD; ServiceIO(); }
 
 
 	// Capture timed service requests.
@@ -2909,18 +2934,54 @@ void main (void)
 //**  resources, do it after SystemInit()                    **
 //*************************************************************
 
+	ROVIM_T2D_Init();			//ROVIM System Initialization
+	
+	TEST_TestInit();				//Testing Module Initialization
+
+	ROVIM_T2D_LockBrake();	// Lock the brakes as soon as possible - safety first
+
 	InitLED();				// ServiceLED Initialization
 
+	//XXX: Temporary stuff
+	ioexpcount = IO_SAMPLE_PERIOD;
 	// Enable Interrupt System
 	EnableInterrupts();
 
 	// Select custom putc()
 	stdout = _H_USER;
 	stderr = _H_USER;
+	
+	InitWatchdog();
 
 	WinkLEDS();				// Wink LED's to indicate power on reset.
+	_LED3_ON;				// Visual error indication due to the brake being locked
 	Greeting();				// Terminal Emulator Greeting
 
+	/* Check if the system is in a good, non-dangerous state before prooceding */
+	
+	ROVIM_T2D_ReadVehicleState();
+	//XXX: criar um enum com os estados inciais possiveis 
+	if ( FALSE != ROVIM_T2D_ValidateInitialState() )
+	{
+		/* The vehicle is good to go */
+		ROVIM_T2D_UnlockBrake();
+		ROVIM_T2D_UnlockMotorsAccess();
+		_LED3_OFF;
+	}
+	else
+	{
+		/* bypass all motor movement commands */
+		ROVIM_T2D_LockMotorsAccess();
+	}
+
+	//continuously monitor the changes we're doing, to avoid bigger troubles in the
+	//future
+	TEST_GenericTesting();
+	
+	//Create the custom status monitoring thread
+	//we'll see if this is really needed
+	//CreateThread(ROVIM_StatusMonitor);
+	
 
 //	***************************************************************************
 //  *                         M A I N    L O O P                              *
@@ -3011,14 +3072,3 @@ void ISRLO (void)
 {
 }
 //----------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
