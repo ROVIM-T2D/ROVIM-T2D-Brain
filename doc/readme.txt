@@ -39,13 +39,19 @@ Build Environment:
 Build Options for Project
 =============
 	 DIRECTORIES
-		Include Search Path: <add path to the include directories>
-		Library Search Path: <add path to the c018i.o file>
+		Include Search Path: <add path to the include directories. 
+		Ex: "Z:\rovim\git\src\test\inc";
+			"Z:\rovim\git\src\rovim\inc";
+			"Z:\rovim\git\src\dalf\inc">
+		Library Search Path: <add path to the c018i.o file. Ex: "Z:\rovim\git\binary">
 
      GENERAL
         Library Path: C:\mcc18\lib
 
      MPLAB C18
+		General
+		  Macro Definitions: <add the macro defining your system configuration 
+		  profile. Ex: "INCLUDE_CONFIG_V0_1">
         Memory Model
           Code:  Large code model
           Data:  Large data model

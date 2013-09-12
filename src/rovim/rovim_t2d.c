@@ -19,7 +19,7 @@
 ******************************************************************************/
 
 
-#include "rovim_t2d.h"
+#include "rovim.h"
 #include "test.h"
 
 // only needed for testing purposed
@@ -30,6 +30,14 @@ extern	BYTE	CMD,ARG[16],ARGN;
 void ROVIM_T2D_Init(void)
 {
 	return;
+}
+
+void ROVIM_T2D_Greeting(void)
+{
+		printf("ROVIM T2D Brain\r\n");
+		printf("ROVIM T2D Software Ver:%2u.%u\r\n",ROVIM_T2D_SW_MAJOR_ID, ROVIM_T2D_SW_MINOR_ID);	// ROVIM Software ID
+		printf("ROVIM T2D Contact(s):\r\n"ROVIM_T2D_CONTACTS"\r\n");								// ROVIM Contacts
+		printf("\r\n");
 }
 
 BOOL ROVIM_T2D_LockMotorsAccess(void)

@@ -542,14 +542,12 @@ void	Greeting(void)
 	if(SCFG == TEcfg) 
 	{ // If Terminal Emulator Interface
 		printf("\r\n");
-		printf("Microcontroller Board: Dalf-1%c\r\n", BOARD_ID);									// Hardware ID
-		printf("Microcontroller PIC: 18F6722 Rev:%02X\r\n", (PIC_DEVID1 & 0x1F));					// Micro ID
-		printf("Dalf User: %05u\r\n",USERID);														// User ID
-		printf("ROVIM T2D Brain\r\n");
-		printf("Dalf T2D Software Ver:%2u.%02u\r\n",MAJOR_ID, MINOR_ID);							// DALF Software ID
-		printf("ROVIM T2D Software Ver:%2u.%02u\r\n",ROVIM_T2D_SW_MAJOR_ID, ROVIM_T2D_SW_MINOR_ID);	// ROVIM Software ID
-		printf("ROVIM T2D Contact(s):\r\n%s\r\n", ROVIM_T2D_CONTACTS);								// ROVIM Contacts
+		printf("Dalf-1%c\r\n", BOARD_ID);							// Hardware ID
+		printf("18F6722 Rev:%02X\r\n", (PIC_DEVID1 & 0x1F));		// Micro ID
+		printf("Software Ver:%2u.%02u\r\n",MAJOR_ID, MINOR_ID);		// Software ID
+		printf("User: %05u\r\n",USERID);							// User ID
 		printf("\r\n");
+		ROVIM_T2D_Greeting();
 	}
 }
 //-----------------------------------------------------------------------------
@@ -570,9 +568,9 @@ void	SerialCmdDispatch(void)
 			err = TeCmdDispatchExt();
 			if (err)
 			{
-				if (err==eParseErr)	 	printf("Parse Err\r\n");
-				if (err==eNumArgsErr)	printf("#Args Err\r\n");
-				if (err==eParmErr)		printf("Parm Err\r\n");
+				if (err==eParseErr)	 	printf("Parse Err\r\nEnter 'H' for help\r\n");
+				if (err==eNumArgsErr)	printf("#Args Err\r\nEnter 'H' for help\r\n");
+				if (err==eParmErr)		printf("Parm Err\r\nEnter 'H' for help\r\n");
 				if (err==eModeErr)	 	printf("Mode Err\r\n");
 				if (err==eDisable)		printf("Disabled\r\n");
 			}
@@ -2840,9 +2838,9 @@ void Svc9(void)			// RC1 Service
 	//----------------------------
 	else if ( SCFG == TEcfg )
 	{// Terminal Emulator Application uses ASCII string data
-		err = TE_CmdParse();
+		err = TE_CmdParseExt();
 		if (!err) { serialcmd=TRUE; CmdSource=TE_SrcMsk; }
-		else if (err==eParseErr)	 printf("Parse Err\r\n");
+		else if (err==eParseErr)	 printf("Parse Err\r\nEnter 'H' for help\r\n");
 	} // If TE
 	//----------------------------
 }
@@ -2934,16 +2932,22 @@ void main (void)
 //**  resources, do it after SystemInit()                    **
 //*************************************************************
 
-	ROVIM_T2D_Init();			//ROVIM System Initialization
+	ROVIM_T2D_Init();		//ROVIM System Initialization
 	
-	TEST_TestInit();				//Testing Module Initialization
+	TEST_TestInit();		//Testing Module Initialization
+	
+	LOG_LogInit();			//Internal non-volatile event logger init
 
 	ROVIM_T2D_LockBrake();	// Lock the brakes as soon as possible - safety first
+	//XXX: Not sure if this can stay here, or has to be moved to beyond the interrupt
+	//init. Nor am I sure on how to test this.
+	EmergencyStopMotors();	// Stop any motor that might be running
 
 	InitLED();				// ServiceLED Initialization
 
 	//XXX: Temporary stuff
 	ioexpcount = IO_SAMPLE_PERIOD;
+
 	// Enable Interrupt System
 	EnableInterrupts();
 
@@ -2976,7 +2980,7 @@ void main (void)
 
 	//continuously monitor the changes we're doing, to avoid bigger troubles in the
 	//future
-	TEST_GenericTesting();
+	TEST_InDevelopmentTesting();
 	
 	//Create the custom status monitoring thread
 	//we'll see if this is really needed

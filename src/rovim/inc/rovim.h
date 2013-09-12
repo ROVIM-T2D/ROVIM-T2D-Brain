@@ -30,13 +30,17 @@
 #include 	"rovim_t2d.h"						// Description of the T2D subsystem
 
 //System configuration profiles
-//#include "rovim_config.h"
+#ifdef INCLUDE_CONFIG_V0_1
+	#include "rovim_config_v0.1.h"
+#else
+#error No configuration profile defined! Please define a configuration profile.
+#endif
 
 
 //Project ID
-const BYTE ROVIM_T2D_SW_MAJOR_ID = 0;
-const BYTE ROVIM_T2D_SW_MINOR_ID = 1;
-const char ROVIM_T2D_CONTACTS[] = "Goncalo Andre (programmer): goncalofr87@gmail.c\
-om\r\nAntonio Serralheiro (superviser): ajserralheiro@gmail.com";
+#define ROVIM_T2D_SW_MAJOR_ID 0
+#define ROVIM_T2D_SW_MINOR_ID 1
+#define ROVIM_T2D_CONTACTS "Goncalo Andre (programmer): goncalofr87@gmail.\
+com\r\nAntonio Serralheiro (superviser): ajserralheiro@gmail.com"
 
 #endif /*__ROVIM_H*/

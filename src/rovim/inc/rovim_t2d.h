@@ -30,6 +30,7 @@
 
 //Function prototypes
 void ROVIM_T2D_Init(void);
+void ROVIM_T2D_Greeting(void);
 BOOL ROVIM_T2D_LockMotorsAccess(void);
 BOOL ROVIM_T2D_UnlockMotorsAccess(void);
 BOOL ROVIM_T2D_LockBrake(void);

@@ -172,8 +172,11 @@ void InitWatchdog(void);
 void ServiceIO(void);
 BYTE TeCmdDispatchExt(void);
 BYTE I2C2CmdDispatchExt(void);
-BYTE Help(void);
-
+BYTE ShowHelp(void);
+void EmergencyStopMotors(void);
+void PrintTime(PTIME time);
+BYTE TeProcessAck(void);
+BYTE TE_CmdParseExt(void);
 
 // External switches used for pot control modes
 #define	SWITCH0	(PORTD&0x01)	// PORTD.0: On/Off
