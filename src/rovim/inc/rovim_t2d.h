@@ -25,18 +25,14 @@
 #define __ROVIM_T2D_H
 #include	"dalf.h"
 
-//Default sample period for the expanded gpios
-#define IO_SAMPLE_PERIOD 0x128		//200 ms
-
 //Function prototypes
 void ROVIM_T2D_Init(void);
 void ROVIM_T2D_Greeting(void);
-BOOL ROVIM_T2D_LockMotorsAccess(void);
-BOOL ROVIM_T2D_UnlockMotorsAccess(void);
 BOOL ROVIM_T2D_LockBrake(void);
 BOOL ROVIM_T2D_UnlockBrake(void);
 BOOL ROVIM_T2D_ReadVehicleState(void);
 BOOL ROVIM_T2D_ValidateInitialState(void);
-BYTE CustomCmdDispatch(void);
+BYTE ROVIM_T2D_CustomCmdDispatch(void);
+void ROVIM_T2D_ServiceIO(void);
 
 #endif /*__ROVIM_T2D_H */

@@ -68,15 +68,26 @@
 #include	"p18f6722.h"						/* Microcontroller specific definitions */
 #include	"config.h"							/* Fuse Settings */
 #include	"dalf.h"
-#include	"rovim.h"							/* description and configuration of the ROVIM system */
-#include	"test.h"							/* testing and debugging features */
 #include	<stdio.h>
+
+//choose the configuration profile
+#ifdef DALF_CONFIG_DEFAULT
+	#include	"dalf_config_default.h"
+#else
+#ifdef DALF_CONFIG_ROVIM_T2D
+	#include	"rovim.h"							/* description and configuration of the ROVIM system */
+#else
+	#error No configuration profile defined! Please define a configuration profile.
+#endif /*DALF_CONFIG_ROVIM_T2D*/
+#endif /*DALF_CONFIG_DEFAULT*/
+
+#ifdef DALF_TEST_ENABLED
+	#include	"dalf_test.h"							/* testing and debugging features */
+#endif
 
 /* Function Prototypes */
 void	ISRHI ( void );
 void	ISRLO ( void );
-
-void	Greeting(void);				// Terminal emulator greeting
 
 	// Command Handling
 void	SerialCmdDispatch(void);	// USART1 or I2C2 control
@@ -105,7 +116,6 @@ void	MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
 void	MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a);
 
 	// Output
-int		printf(const rom char *fmt, ...);
 void	ReturnData(void);		// Return data and/or status to cmd initiator.
 void	DispCHR(void);			// xCHR 
 void	DispE(void);			// Motor Position (encoder) 
@@ -219,7 +229,6 @@ extern	BYTE	BOARD_ID;					// Board ID char
 extern	BYTE	MAJOR_ID;					// Software major ID byte
 extern	BYTE	MINOR_ID;					// Software minor ID byte
 extern	WORD	USERID;						// PIC_USERID[3..0] concatenated
-extern	BYTE	SCFG;						// Serial Configuration (1..3)
 
 extern	WORD	SERVICE, SERVICE_REQ;		// Requests from ISR's
 extern	BYTE	TIMESVC, TIMESVC_REQ;		// Timed requests
@@ -266,7 +275,6 @@ extern	short long	ErrDiff2;				// Motor2 PID Err Diff (dErr/dT)
 extern	short long	ErrSum2;				// Motor2 PID Err Sum
 
 
-extern	BYTE	CMD,ARG[16],ARGN;
 extern	BYTE	ReturnN;					// Commmand Interface 
 extern	BYTE	CmdSource;
 
@@ -279,6 +287,14 @@ extern	BYTE	I2C2_State;					// SLAVE ISR State.
 
 extern	BYTE	Cmd_Ticks;					// Cmd Interface Timeout ticker
 
+
+//*****************************************
+//**          Other Variables            **
+//*****************************************
+WORD	ioexpcount;	// IO expander frequency counter;
+#ifdef WATCHDOG_ENABLED
+	WORD watchdogcount = WATCHDOG_PERIOD;
+#endif
 
 //**********************
 //  Global Variables  **
@@ -297,8 +313,6 @@ ULONG	grn2pattern;	// LED2: On/Off LED bit pattern
 ULONG	redpattern;		// LED3: On/Off LED bit pattern
 BYTE	ledcount;		// LED Service Counter
 
-// IO expander variables
-WORD	ioexpcount;
 // TIME variables
 TIME	Delay1;
 
@@ -547,7 +561,6 @@ void	Greeting(void)
 		printf("Software Ver:%2u.%02u\r\n",MAJOR_ID, MINOR_ID);		// Software ID
 		printf("User: %05u\r\n",USERID);							// User ID
 		printf("\r\n");
-		ROVIM_T2D_Greeting();
 	}
 }
 //-----------------------------------------------------------------------------
@@ -2670,8 +2683,16 @@ void Svc0(void)			// TMR0: Heartbeat (1msec)
 
 	// Conditionally service on-board LED's
 	ledcount--;	if(!ledcount) { ledcount=LED_PERIOD; ServiceLED(); }
-	ioexpcount--;if(!ioexpcount) { ioexpcount=IO_SAMPLE_PERIOD; ServiceIO(); }
-
+	if(GetExternalAppSupportFcts()->ServiceIOFct)
+	{
+		ioexpcount--;if(!ioexpcount) { GetExternalAppSupportFcts()->ServiceIOFct(); }
+	}
+#ifdef WATCHDOG_ENABLED
+	watchdogcount--; if(!watchdogcount) {watchdogcount = WATCHDOG_PERIOD; KickWatchdog(); }
+#endif
+#ifdef DALF_TEST_ENABLED
+	//TEST_Svc0();
+#endif
 
 	// Capture timed service requests.
 	TIMESVC = TIMESVC_REQ;				// TIMESVC = Working copy
@@ -2926,27 +2947,32 @@ void SvcF(void)			// UNUSED
 //-----------------------------------------------------------------------------
 void main (void)
 {
-	SystemInit();			// Basic System Initialization
+	SystemInitExt();			// Basic System Initialization
+	SetVerbosity (INIT_VERBOSITY_LEVEL);
 //*************************************************************
 //**  SystemInit() is required.  If you need to reconfigure  **
 //**  resources, do it after SystemInit()                    **
 //*************************************************************
 
-	ROVIM_T2D_Init();		//ROVIM System Initialization
-	
-	TEST_TestInit();		//Testing Module Initialization
-	
-	LOG_LogInit();			//Internal non-volatile event logger init
+	//XXX: this initialization order really has to be studied and tested, and validated.
 
-	ROVIM_T2D_LockBrake();	// Lock the brakes as soon as possible - safety first
+	//XXX: I do not like this like this: rovim t2d was supposed to be isolated from
+	ROVIM_T2D_Init();		//ROVIM System Initialization
+
 	//XXX: Not sure if this can stay here, or has to be moved to beyond the interrupt
 	//init. Nor am I sure on how to test this.
 	EmergencyStopMotors();	// Stop any motor that might be running
+	ROVIM_T2D_LockBrake();	// Lock the brakes as soon as possible - safety first
+	
+#ifdef DALF_TEST_ENABLED
+	TEST_TestInit();		//Testing Module Initialization
+#endif
+
+#ifdef LOG_ENABLED
+	LOG_LogInit();			//Internal non-volatile event logger initialization
+#endif
 
 	InitLED();				// ServiceLED Initialization
-
-	//XXX: Temporary stuff
-	ioexpcount = IO_SAMPLE_PERIOD;
 
 	// Enable Interrupt System
 	EnableInterrupts();
@@ -2955,11 +2981,21 @@ void main (void)
 	stdout = _H_USER;
 	stderr = _H_USER;
 	
+#ifdef WATCHDOG_ENABLED
 	InitWatchdog();
+#endif
 
 	WinkLEDS();				// Wink LED's to indicate power on reset.
 	_LED3_ON;				// Visual error indication due to the brake being locked
-	Greeting();				// Terminal Emulator Greeting
+
+	if (GetExternalAppSupportFcts()->GreetingFct)
+	{
+		GetExternalAppSupportFcts()->GreetingFct();				// Terminal Emulator Greeting
+	}
+	else
+	{
+		Greeting();
+	}
 
 	/* Check if the system is in a good, non-dangerous state before prooceding */
 	
@@ -2969,22 +3005,20 @@ void main (void)
 	{
 		/* The vehicle is good to go */
 		ROVIM_T2D_UnlockBrake();
-		ROVIM_T2D_UnlockMotorsAccess();
+		UnlockMotorsAccess();
 		_LED3_OFF;
 	}
 	else
 	{
 		/* bypass all motor movement commands */
-		ROVIM_T2D_LockMotorsAccess();
+		LockMotorsAccess();
 	}
 
 	//continuously monitor the changes we're doing, to avoid bigger troubles in the
 	//future
+#ifdef DALF_TEST_ENABLED
 	TEST_InDevelopmentTesting();
-	
-	//Create the custom status monitoring thread
-	//we'll see if this is really needed
-	//CreateThread(ROVIM_StatusMonitor);
+#endif
 	
 
 //	***************************************************************************

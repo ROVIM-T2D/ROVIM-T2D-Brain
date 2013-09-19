@@ -35,6 +35,11 @@
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
 
+#ifndef __DALF_H
+#define __DALF_H
+
+#include <stdio.h>
+
 
 // Logic
 #define	FALSE	0x00
@@ -94,6 +99,22 @@ typedef struct
 //-----------------------------------------------------------------------
 
 
+//-----------------------------------------------------------------------
+// External functions used to customize the Dalf firmware to run other
+// applications on top of it.
+//-----------------------------------------------------------------------
+typedef void (*greeting)(void);
+typedef BYTE (*cmdExtensionDispatch)(void);
+typedef void (*serviceIO)(void);
+
+typedef struct
+{
+	greeting				GreetingFct;
+	cmdExtensionDispatch 	CmdExtensionDispatchFct;
+	serviceIO 				ServiceIOFct;
+}ExternalAppSupportFcts;
+
+//-----------------------------------------------------------------------
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -162,21 +183,47 @@ extern	void	Mtr1FlagFix(void);		// Fixup after OvrCrnt handled by ISR
 extern	void	Mtr2FlagFix(void);		// Fixup after OvrCrnt handled by ISR
 
 
+//XXX: this was moved here without though. Analyse this properly
+int		printf(const rom char *fmt, ...);
+
 ////////////////////////////////////////////////////////////////////////////////
 //                E X T E N D E D     F U N C T I O N S                       //
 //                                                                            //
 //              System functions used because of the ROVIM Project.           //
 ////////////////////////////////////////////////////////////////////////////////
 
+// system functions
+void SystemInitExt(void);
+#ifdef WATCHDOG_ENABLED
 void InitWatchdog(void);
-void ServiceIO(void);
+void KickWatchdog(void);
+#endif
+PTIME GetCurrentTime(void);
+void EmergencyStopMotors(void);
+void LockMotorsAccess(void);
+void UnlockMotorsAccess(void);
 BYTE TeCmdDispatchExt(void);
 BYTE I2C2CmdDispatchExt(void);
-BYTE ShowHelp(void);
-void EmergencyStopMotors(void);
-void PrintTime(PTIME time);
 BYTE TeProcessAck(void);
 BYTE TE_CmdParseExt(void);
+BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
+	CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr);
+ExternalAppSupportFcts* GetExternalAppSupportFcts(void);
+
+//support functions
+void STATUS_PrintCmd(void);
+void SetVerbosity(BYTE level);
+BYTE GetVerbosity(void);
+#ifdef HELP_ENABLED
+BYTE ShowHelp(void);
+#endif
+#ifdef LOG_ENABLED
+void LOG_LogInit(void);
+#endif
+
+//Custom applications functions
+void Greeting(void);
+BYTE CmdExtensionDispatch(void);
 
 // External switches used for pot control modes
 #define	SWITCH0	(PORTD&0x01)	// PORTD.0: On/Off
@@ -462,3 +509,53 @@ BYTE TE_CmdParseExt(void);
 #define	FORWARD		0x00	// Direction
 #define	REVERSE		0x01	// Direction
 #define	SPEEDZERO	0x00	// Speed
+
+
+////////////////////////////////////////////////////
+//          Other variables declarations          //
+////////////////////////////////////////////////////
+
+extern	WORD	ioexpcount;					// IO expander frequency counter;
+#ifdef WATCHDOG_ENABLED
+	extern WORD watchdogcount;
+#endif
+extern	BYTE	CMD,ARG[16],ARGN;			// parsed command info
+extern	BYTE	SCFG;						// Serial Configuration (1..3)
+
+//Verbosity level mask
+#define VERBOSITY_DISABLED				0x00
+#define VERBOSITY_LEVEL_ERROR 			0x01
+#define VERBOSITY_LEVEL_WARNING			0x02
+#define VERBOSITY_LEVEL_STATUS1 		0x04
+#define VERBOSITY_LEVEL_STATUS2			0x08
+
+#define VERBOSITY_USE_CALL_INFO			0x40
+#define VERBOSITY_USE_TIMESTAMP			0x80
+
+//Verbosity print macros
+//Q: Why on earth would you do such a long macro?
+//A: Because idk how to properly pass variable # of arguments to a subfunction...
+#define FATAL_ERROR_MSG(ARGS)		do { \
+	SetVerbosity( (GetVerbosity()) | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO | VERBOSITY_USE_TIMESTAMP); \
+	PRINT_VERBOSITY_MSG("FATAL ERROR!!:\t",VERBOSITY_LEVEL_ERROR,ARGS); \
+} while(0)
+#define ERROR_MSG(ARGS)				PRINT_VERBOSITY_MSG("ERROR!:\t",VERBOSITY_LEVEL_ERROR,ARGS)
+#define WARNING_MSG(ARGS)			PRINT_VERBOSITY_MSG("WARNING:\t",VERBOSITY_LEVEL_WARNING,ARGS)
+#define STATUS1_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS1,ARGS)
+#define STATUS2_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS2,ARGS)
+
+#define PRINT_VERBOSITY_MSG(TYPE,VERBOSITY_LEVEL, ARGS) do { \
+	if(SCFG != TEcfg) break;\
+	if(GetVerbosity() & VERBOSITY_LEVEL) { \
+		printf(TYPE); \
+		if (GetVerbosity() & VERBOSITY_USE_CALL_INFO) { \
+			printf("File: "__FILE__"; Line:%d:\t",__LINE__); \
+		} \
+		if (GetVerbosity() & VERBOSITY_USE_TIMESTAMP) { \
+			printf("Elapsed Time: %lu s\t",GetCurrentTime()->secs); \
+		} \
+	printf(ARGS); \
+	} \
+} while(0)
+
+#endif /*__DALF_H*/

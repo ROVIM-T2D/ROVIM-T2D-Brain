@@ -23,13 +23,12 @@
 #ifndef __ROVIM_CONFIG_V0_1_H
 #define __ROVIM_CONFIG_V0_1_H
 
-//include test module
-#define TESTING_ENABLED
-
-//include logging module
-#define LOGGING_ENABLED
+#define WATCHDOG_PERIOD 0xFA		//250 ms
 
 //use maximum verbosity
-#define INIT_VERBOSITY_LEVEL 0xFF
+#define INIT_VERBOSITY_LEVEL 0x8F	//remove the call info verbosity level while it isn't working properly
+
+//Default sample period for the expanded gpios
+#define IO_SAMPLE_PERIOD 0xC8		//200 ms
 
 #endif /*__ROVIM_CONFIG_V0_1_H*/

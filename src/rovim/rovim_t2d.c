@@ -20,34 +20,32 @@
 
 
 #include "rovim.h"
-#include "test.h"
-
-// only needed for testing purposed
+#include "dalf.h"
 #include <stdio.h>
 
-extern	BYTE	CMD,ARG[16],ARGN;
 
 void ROVIM_T2D_Init(void)
 {
+	//SetExternalAppSupportFcts(ROVIM_T2D_Greeting, ROVIM_T2D_CustomCmdDispatch, ROVIM_T2D_ServiceIO);
+	ioexpcount = IO_SAMPLE_PERIOD;
 	return;
 }
 
 void ROVIM_T2D_Greeting(void)
 {
+	Greeting();
+	if(SCFG == TEcfg) 
+	{ // If Terminal Emulator Interface
 		printf("ROVIM T2D Brain\r\n");
 		printf("ROVIM T2D Software Ver:%2u.%u\r\n",ROVIM_T2D_SW_MAJOR_ID, ROVIM_T2D_SW_MINOR_ID);	// ROVIM Software ID
 		printf("ROVIM T2D Contact(s):\r\n"ROVIM_T2D_CONTACTS"\r\n");								// ROVIM Contacts
 		printf("\r\n");
+	}
 }
 
-BOOL ROVIM_T2D_LockMotorsAccess(void)
+BYTE ROVIM_T2D_CustomCmdDispatch(void)
 {
-	return TRUE;
-}
-
-BOOL ROVIM_T2D_UnlockMotorsAccess(void)
-{
-	return TRUE;
+	return eDisable;
 }
 
 BOOL ROVIM_T2D_LockBrake(void)
@@ -70,7 +68,8 @@ BOOL ROVIM_T2D_ValidateInitialState(void)
 	return TRUE;
 }
 
-BYTE CustomCmdDispatch(void)
+void ROVIM_T2D_ServiceIO(void)
 {
-	return eDisable;
+	ioexpcount = IO_SAMPLE_PERIOD;
+	return;
 }

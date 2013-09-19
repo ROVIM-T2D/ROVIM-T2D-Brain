@@ -73,6 +73,13 @@ Build Options for Project
         General
           Default Radix = Hex
 
+Optional compile options for project
+=============
+DALF_TEST_ENABLED 	//include test module
+LOG_ENABLED			//include logging module
+HELP_ENABLED				//include help
+WATCHDOG_ENABLED		//Use watchdog
+
 
 Notes:
 1) Install the MPLAB and MCC18 on your machine. The software versions of these

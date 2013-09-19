@@ -30,10 +30,10 @@
 #include 	"rovim_t2d.h"						// Description of the T2D subsystem
 
 //System configuration profiles
-#ifdef INCLUDE_CONFIG_V0_1
-	#include "rovim_config_v0.1.h"
+#ifdef ROVIM_CONFIG_T2D_DEVELOPMENT
+	#include "rovim_config_t2d_development.h"
 #else
-#error No configuration profile defined! Please define a configuration profile.
+	#error No ROVIM configuration profile defined! Please define a configuration profile.
 #endif
 
 
