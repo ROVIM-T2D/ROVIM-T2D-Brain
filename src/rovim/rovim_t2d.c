@@ -45,6 +45,17 @@ void ROVIM_T2D_Greeting(void)
 
 BYTE ROVIM_T2D_CustomCmdDispatch(void)
 {
+	
+	switch(CMD)
+	{
+		case CustomCmdIdOffset:
+			break;
+		case (CustomCmdIdOffset + 1):
+			break;
+		//Add more ROVIM commands here
+		default:
+			return eParseErr;
+	}
 	return eDisable;
 }
 

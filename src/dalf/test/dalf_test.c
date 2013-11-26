@@ -82,7 +82,7 @@ void TEST_InDevelopmentTesting(void)
 	// verbosity test
 	SetVerbosity(VERBOSITY_DISABLED);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
@@ -90,28 +90,28 @@ void TEST_InDevelopmentTesting(void)
 	//Now, let's enable it one by one
 	SetVerbosity(VERBOSITY_USE_TIMESTAMP);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
 	SetVerbosity(VERBOSITY_USE_CALL_INFO);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
 	SetVerbosity(VERBOSITY_LEVEL_ERROR);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
 	SetVerbosity(VERBOSITY_LEVEL_WARNING);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
@@ -119,34 +119,34 @@ void TEST_InDevelopmentTesting(void)
 	SetVerbosity(VERBOSITY_LEVEL_STATUS1);
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS2);
+	SetVerbosity(VERBOSITY_LEVEL_DEBUG);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS1 | VERBOSITY_LEVEL_STATUS2 | VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_TIMESTAMP | VERBOSITY_USE_CALL_INFO);
+	SetVerbosity(VERBOSITY_LEVEL_STATUS1 | VERBOSITY_LEVEL_DEBUG | VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_TIMESTAMP | VERBOSITY_USE_CALL_INFO);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
 	SetVerbosity(VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS1 | VERBOSITY_USE_TIMESTAMP | VERBOSITY_LEVEL_STATUS2);
+	SetVerbosity(VERBOSITY_LEVEL_STATUS1 | VERBOSITY_USE_TIMESTAMP | VERBOSITY_LEVEL_DEBUG);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
@@ -154,7 +154,7 @@ void TEST_InDevelopmentTesting(void)
 	SetVerbosity(VERBOSITY_LEVEL_WARNING);
 	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
-	STATUS2_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
+	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	

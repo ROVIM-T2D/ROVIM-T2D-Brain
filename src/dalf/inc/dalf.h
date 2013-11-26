@@ -209,9 +209,12 @@ BYTE TE_CmdParseExt(void);
 BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
 	CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr);
 ExternalAppSupportFcts* GetExternalAppSupportFcts(void);
+BYTE CmdExt_OpenLoopStepResp(void);
+void OpenLoopTune1(void);
+void OpenLoopTune2(void);
 
 //support functions
-void STATUS_PrintCmd(void);
+void DEBUG_PrintCmd(void);
 void SetVerbosity(BYTE level);
 BYTE GetVerbosity(void);
 #ifdef HELP_ENABLED
@@ -223,7 +226,6 @@ void LOG_LogInit(void);
 
 //Custom applications functions
 void Greeting(void);
-BYTE CmdExtensionDispatch(void);
 
 // External switches used for pot control modes
 #define	SWITCH0	(PORTD&0x01)	// PORTD.0: On/Off
@@ -442,6 +444,7 @@ BYTE CmdExtensionDispatch(void);
 #define		triga_Msk		0x01	// Bit0 - Waiting for Closed Loop Trigger
 
 // Mtrx_Flags2 bits
+#define		OL_stepresp		0x40	// Bit6 - "1"=Measuring motor open loop step response
 #define		_MtrD_mask		0x20	// Bit5 - "1"=Reverse
 #define		DisableMsk		0x01	// Bit0	- "1"=Disable all Mtr commands
 
@@ -510,6 +513,11 @@ BYTE CmdExtensionDispatch(void);
 #define	REVERSE		0x01	// Direction
 #define	SPEEDZERO	0x00	// Speed
 
+//Step Response
+#define MAXSAMPLES 0x3e7	//Maximum samples collected when measuring step response
+
+//Command line extension definitions
+#define CustomCmdIdOffset	0x20	//identifier of the first custom command, "G 'X'"
 
 ////////////////////////////////////////////////////
 //          Other variables declarations          //
@@ -521,13 +529,22 @@ extern	WORD	ioexpcount;					// IO expander frequency counter;
 #endif
 extern	BYTE	CMD,ARG[16],ARGN;			// parsed command info
 extern	BYTE	SCFG;						// Serial Configuration (1..3)
+extern	BYTE	Mtr2_Flags2;				// Motor2 flags2
+extern	BYTE	Mtr1_Flags2;				// Motor1 flags2
+extern	short long	encode1;				// Mtr1 position encoder
+extern	short long	encode2;				// Mtr2 position encoder
+extern WORD OL2Limit;						
+extern WORD OL1Limit;
+extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
+extern BYTE	MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
+extern	BYTE	CmdSource;
 
 //Verbosity level mask
 #define VERBOSITY_DISABLED				0x00
 #define VERBOSITY_LEVEL_ERROR 			0x01
 #define VERBOSITY_LEVEL_WARNING			0x02
 #define VERBOSITY_LEVEL_STATUS1 		0x04
-#define VERBOSITY_LEVEL_STATUS2			0x08
+#define VERBOSITY_LEVEL_DEBUG			0x08
 
 #define VERBOSITY_USE_CALL_INFO			0x40
 #define VERBOSITY_USE_TIMESTAMP			0x80
@@ -542,7 +559,7 @@ extern	BYTE	SCFG;						// Serial Configuration (1..3)
 #define ERROR_MSG(ARGS)				PRINT_VERBOSITY_MSG("ERROR!:\t",VERBOSITY_LEVEL_ERROR,ARGS)
 #define WARNING_MSG(ARGS)			PRINT_VERBOSITY_MSG("WARNING:\t",VERBOSITY_LEVEL_WARNING,ARGS)
 #define STATUS1_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS1,ARGS)
-#define STATUS2_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS2,ARGS)
+#define DEBUG_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_DEBUG,ARGS)
 
 #define PRINT_VERBOSITY_MSG(TYPE,VERBOSITY_LEVEL, ARGS) do { \
 	if(SCFG != TEcfg) break;\

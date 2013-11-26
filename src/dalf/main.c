@@ -175,7 +175,7 @@ extern WORD VBWARN;
 extern BYTE AMINP;
 extern WORD MAXERR, MAXSUM;
 
-extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
+// extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
 extern WORD	ACC1, VMID1;
 extern BYTE	VSP1;
 extern WORD KP1, KI1, KD1;
@@ -183,7 +183,7 @@ extern BYTE	VMIN1, VMAX1;
 extern WORD TPR1;
 extern WORD MIN1, MAX1;
 
-extern BYTE	MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
+// extern BYTE	MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
 extern WORD	ACC2, VMID2;
 extern BYTE	VSP2;
 extern WORD KP2, KI2, KD2;
@@ -253,9 +253,9 @@ extern	WORD	RC3center;					// Pulse range center (uSec)
 extern	WORD	Pid1Limit;                  // Motor1 Tuning Output Control
 extern	WORD 	npid1;                      // Motor1 PID Tuning Output count
 extern	BYTE	Mtr1_Flags1;                // Motor1 flags1
-extern	BYTE	Mtr1_Flags2;                // Motor1 flags2
+//extern	BYTE	Mtr1_Flags2;                // See dalf.h
 extern	BYTE	S1,Power1;					// SPD: [0..100%], [0..VMAX1%]
-extern	short long	encode1;				// Mtr1 position encoder
+//extern	short long	encode1;			// See dalf.h
 extern	short long	V1;						// Mtr1 Velocity
 extern	short long	x1pos;					// Motor1 PID Target
 extern	short long	Err1;					// Motor1 PID Err
@@ -265,9 +265,9 @@ extern	short long	ErrSum1;				// Motor1 PID Err Sum
 extern	WORD	Pid2Limit;					// Motor2 Tuning Output Control
 extern	WORD	npid2;						// Motor2 PID Tuning: Output count.
 extern	BYTE	Mtr2_Flags1;				// Motor2 flags1
-extern	BYTE	Mtr2_Flags2;				// Motor2 flags2
+//extern	BYTE	Mtr2_Flags2;			// See dalf.h
 extern	BYTE	S2,Power2;					// SPD: [0..100%], [0..VMAX2%]
-extern	short long	encode2;				// Mtr2 position encoder
+//extern	short long	encode2;			// See dalf.h
 extern	short long	V2;						// Mtr2 Velocity
 extern	short long	x2pos;					// Motor2 PID Targets
 extern	short long	Err2;					// Motor2 PID Err
@@ -276,7 +276,6 @@ extern	short long	ErrSum2;				// Motor2 PID Err Sum
 
 
 extern	BYTE	ReturnN;					// Commmand Interface 
-extern	BYTE	CmdSource;
 
 extern	BYTE	LedErr;						// "1" bits flag err cond'n
 
@@ -2711,7 +2710,9 @@ void Svc0(void)			// TMR0: Heartbeat (1msec)
 	//     R A M P I N G      S E R V I C E S      //
 	/////////////////////////////////////////////////
 	RampMotor1();			// Conditionally ramp mtr1
+	OpenLoopTune1();		// Conditional mtr1 open loop response output
 	RampMotor2();			// Conditionally ramp mtr2
+	OpenLoopTune1();		// Conditional mtr2 open loop response output
 
 
 	////////////////////////////////////////
