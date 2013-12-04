@@ -1,3 +1,7 @@
+//#line 1 "main.c"			//work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+//cannot set breakpoints if this directive is used:
+//info: http://www.microchip.com/forums/m105540-print.aspx
+//uncomment only when breakpoints are no longer needed
 /******************************************************************************
 *******************************************************************************
 **
@@ -2710,9 +2714,9 @@ void Svc0(void)			// TMR0: Heartbeat (1msec)
 	//     R A M P I N G      S E R V I C E S      //
 	/////////////////////////////////////////////////
 	RampMotor1();			// Conditionally ramp mtr1
-	OpenLoopTune1();		// Conditional mtr1 open loop response output
+	//OpenLoopTune1();		// Conditional mtr1 open loop response output
 	RampMotor2();			// Conditionally ramp mtr2
-	OpenLoopTune1();		// Conditional mtr2 open loop response output
+	//OpenLoopTune1();		// Conditional mtr2 open loop response output
 
 
 	////////////////////////////////////////
@@ -2949,7 +2953,6 @@ void SvcF(void)			// UNUSED
 void main (void)
 {
 	SystemInitExt();			// Basic System Initialization
-	SetVerbosity (INIT_VERBOSITY_LEVEL);
 //*************************************************************
 //**  SystemInit() is required.  If you need to reconfigure  **
 //**  resources, do it after SystemInit()                    **

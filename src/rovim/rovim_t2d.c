@@ -1,3 +1,7 @@
+//#line 1 "rovim_t2d.c"			//work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+//cannot set breakpoints if this directive is used:
+//info: http://www.microchip.com/forums/m105540-print.aspx
+//uncomment only when breakpoints are no longer needed
 /******************************************************************************
 *******************************************************************************
 **
@@ -26,8 +30,10 @@
 
 void ROVIM_T2D_Init(void)
 {
-	//SetExternalAppSupportFcts(ROVIM_T2D_Greeting, ROVIM_T2D_CustomCmdDispatch, ROVIM_T2D_ServiceIO);
+	SetExternalAppSupportFcts(ROVIM_T2D_Greeting, ROVIM_T2D_CustomCmdDispatch, ROVIM_T2D_ServiceIO);
 	ioexpcount = IO_SAMPLE_PERIOD;
+	SetVerbosity (INIT_VERBOSITY_LEVEL);
+	
 	return;
 }
 

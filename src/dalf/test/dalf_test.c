@@ -1,3 +1,7 @@
+//#line 1 "dalf_test.c"			//work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+//cannot set breakpoints if this directive is used:
+//info: http://www.microchip.com/forums/m105540-print.aspx
+//uncomment only when breakpoints are no longer needed
 /******************************************************************************
 *******************************************************************************
 **
@@ -63,7 +67,7 @@ void TEST_InDevelopmentTesting(void)
 	}
 	
 	//Now let's wait 10.3 secs before reprinting the time
-	SetDelay(&then,10,msec_300);
+	SetDelay(&then,2,msec_300);
 	while(!Timeout(&then));
 	if(SCFG == TEcfg)
 	{
@@ -81,7 +85,7 @@ void TEST_InDevelopmentTesting(void)
 
 	// verbosity test
 	SetVerbosity(VERBOSITY_DISABLED);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
@@ -89,70 +93,70 @@ void TEST_InDevelopmentTesting(void)
 	
 	//Now, let's enable it one by one
 	SetVerbosity(VERBOSITY_USE_TIMESTAMP);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
 	SetVerbosity(VERBOSITY_USE_CALL_INFO);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
 	SetVerbosity(VERBOSITY_LEVEL_ERROR);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
 	SetVerbosity(VERBOSITY_LEVEL_WARNING);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS1);
+	SetVerbosity(VERBOSITY_LEVEL_STATUS);
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
 	SetVerbosity(VERBOSITY_LEVEL_DEBUG);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS1 | VERBOSITY_LEVEL_DEBUG | VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_TIMESTAMP | VERBOSITY_USE_CALL_INFO);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_LEVEL_DEBUG | VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_TIMESTAMP | VERBOSITY_USE_CALL_INFO);
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
 	SetVerbosity(VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS1 | VERBOSITY_USE_TIMESTAMP | VERBOSITY_LEVEL_DEBUG);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_USE_TIMESTAMP | VERBOSITY_LEVEL_DEBUG);
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
 	SetVerbosity(VERBOSITY_LEVEL_WARNING);
-	STATUS1_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
+	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
@@ -164,140 +168,140 @@ void TEST_InDevelopmentTesting(void)
 	/*IO expander testing - understood*/
 	/* Bank1 = J6*/
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS1 | VERBOSITY_USE_TIMESTAMP);
-	STATUS1_MSG("Initial read from GPIO bank 1, port B1\r\n");
+	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_USE_TIMESTAMP);
+	STATUS_MSG("Initial read from GPIO bank 1, port B1\r\n");
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now writting FF's on the same GPIOs\r\n");
+	STATUS_MSG("Now writting FF's on the same GPIOs\r\n");
 	WriteIOExp1(0x13,0xFF);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now writting 0x0F on the same GPIOs\r\n");
+	STATUS_MSG("Now writting 0x0F on the same GPIOs\r\n");
 	WriteIOExp1(0x13,0x0F);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now writing 0x0F on the direction register of the same GPIOs\r\n");
+	STATUS_MSG("Now writing 0x0F on the direction register of the same GPIOs\r\n");
 	WriteIOExp1(0x01,0x0F);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now, with half of GPIOs direction changed, writting 0x33 on them\r\n");
+	STATUS_MSG("Now, with half of GPIOs direction changed, writting 0x33 on them\r\n");
 	WriteIOExp1(0x13,0x33);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now, with 0x0F on the direction and 0x33 on the GPIOs value, write 0xAA on their polarity\r\n");
+	STATUS_MSG("Now, with 0x0F on the direction and 0x33 on the GPIOs value, write 0xAA on their polarity\r\n");
 	WriteIOExp1(0x03,0xAA);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now, let's change the pull up. write 0x6C on that register\r\n");
+	STATUS_MSG("Now, let's change the pull up. write 0x6C on that register\r\n");
 	WriteIOExp1(0x0D,0x6C);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now,let's try to write 0xCC to the output latch and see what happens\r\n");
+	STATUS_MSG("Now,let's try to write 0xCC to the output latch and see what happens\r\n");
 	WriteIOExp1(0x15,0xCC);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
-	STATUS1_MSG("Now, with the output latches all pumped up, let's change the direction of the GPIOs and see what happens\r\n");
+	STATUS_MSG("Now, with the output latches all pumped up, let's change the direction of the GPIOs and see what happens\r\n");
 	WriteIOExp1(0x01,0xF0);
 	GPIOBank1 = ReadIOExp1(0x01);
-	STATUS1_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x03);
-	STATUS1_MSG("Input Polarity=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0B);
-	STATUS1_MSG("Configuration=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x0D);
-	STATUS1_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x13);
-	STATUS1_MSG("GPIO Value=%02X\r\n",GPIOBank1);
+	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
-	STATUS1_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
 	
 	SetVerbosity(InitVerbosity);
 	printf("\r\n");

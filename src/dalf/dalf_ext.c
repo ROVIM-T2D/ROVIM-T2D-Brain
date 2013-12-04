@@ -1,3 +1,7 @@
+//#line 1 "dalf_ext.c"			//work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+//cannot set breakpoints if this directive is used:
+//info: http://www.microchip.com/forums/m105540-print.aspx
+//uncomment only when breakpoints are no longer needed
 /******************************************************************************
 *******************************************************************************
 **
@@ -39,7 +43,7 @@ void DEBUG_PrintCmd(void)
 	if ((!(verbosity & VERBOSITY_LEVEL_DEBUG)) || (SCFG != TEcfg))
 		return;
 
-	if (ARGN == 0) return;
+	if (CMD == 0xA) return;
 	DEBUG_MSG("Cmd received: %c. # arguments: %d. Arguments: ", CMD, ARGN);
 	for(i=0;i<ARGN;i++)
 	{
@@ -56,8 +60,8 @@ void SetVerbosity(BYTE level)
 		verbosity |= VERBOSITY_LEVEL_ERROR;
 	if (VERBOSITY_LEVEL_WARNING & level)
 		verbosity |= VERBOSITY_LEVEL_WARNING;
-	if (VERBOSITY_LEVEL_STATUS1 & level)
-		verbosity |= VERBOSITY_LEVEL_STATUS1;
+	if (VERBOSITY_LEVEL_STATUS & level)
+		verbosity |= VERBOSITY_LEVEL_STATUS;
 	if (VERBOSITY_LEVEL_DEBUG & level)
 		verbosity |= VERBOSITY_LEVEL_DEBUG;
 	if (VERBOSITY_USE_CALL_INFO & level)
@@ -209,19 +213,21 @@ BYTE CmdExt_OpenLoopStepResp(void)
 {
 	BYTE err = NoErr;
 	BYTE memstack[2] = {0};		//stack for temporary save of memory configurations
-	BYTE* mempoint[2] = {0};	//memory mapping of values saved on the stack
+	WORD* mempoint[2] = {0};	//memory mapping of values saved on the stack
 	WORD samples = 0;
 	//Open loop motor step response
-	//Command format: "G 1 n_samples [CmdX args]"
+	//Command format: "G 1 n_samplesH n_samplesL [CmdX args]"
 	
 	//validade input
 	//#args check: we expect one or two bytes for the number of samples, and we can recover if the acc is not specified
-	if ( !((ARGN >= 5) && (ARGN <= 7)) ) return eNumArgsErr;
+	//XXX: ARGN inclui o nome do comando, ou apenas os seus argumentos??????????
+	if ( !((ARGN >= 6) && (ARGN <= 7)) ) return eNumArgsErr;
 	
-	samples = (ARG[1] & 0xFF00) | (ARG[2] && 0x00FF);
+	samples = ARG[1];
+	samples = (samples << 8) | ARG[2];
 	if (samples > MAXSAMPLES)
 	{
-		WARNING_MSG("Number of samples will be limited to the maximum permited, %c.\r\n", MAXSAMPLES);
+		WARNING_MSG("Number of samples will be limited to the maximum permited, %d.\r\n", MAXSAMPLES);
 		samples = MAXSAMPLES;
 	}
 	//prepare command for execution
@@ -236,11 +242,11 @@ BYTE CmdExt_OpenLoopStepResp(void)
 		OL2Limit = samples;
 	}
 	CMD = 'X';
-	ARG[0] = ARG[2];
-	ARG[1] = ARG[3];
-	ARG[2] = ARG[4];
+	ARG[0] = ARG[3];
+	ARG[1] = ARG[4];
+	ARG[2] = ARG[5];
 	ARG[3] = 1;			//Let's limit the acceleration a bit, to avoid possible damage to the drivetrain
-	ARGN -= 2;
+	ARGN -= 3;
 	if (ARGN == 3)
 	{
 		ARGN++;
@@ -248,12 +254,13 @@ BYTE CmdExt_OpenLoopStepResp(void)
 	else
 	{
 		ARGN = 4;		//just making sure
-		WARNING_MSG("Overriding acceleration control input for maximum acceleration possible, 0\r\n");
+		WARNING_MSG("Overriding acceleration control input. Using maximum acceleration possible\r\n");
 	}
-	DEBUG_PrintCmd();
-	STATUS1_MSG("Sample time = 1ms; number of samples = %d\r\n",samples); 	//Heartbeat timer
-	mempoint[0] = (BYTE*) 0x012B;		//AMINP
+	DEBUG_PrintCmd();	//XXX temp
+	STATUS_MSG("Sample time = 1ms; number of samples = %d\r\n",samples); 	//Heartbeat timer
+	mempoint[0] = (WORD*) 0x012B;		//AMINP
 	memstack[0] = *(mempoint[0]);		//push the current memory configuration
+	*(mempoint[0]) = ARG[3];
 
 	//Do the motor movement command
 	err = TeCmdDispatchExt();
@@ -295,6 +302,7 @@ void RegisterCmdhelp(void)
 
 void EmergencyStopMotors(void)
 {
+	//XXX is there a more failsafe method to stop the motors??
 	CMD = 'O';
 	ARGN = 0x00;
 	TeCmdDispatchExt();

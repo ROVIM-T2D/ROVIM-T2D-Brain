@@ -514,7 +514,7 @@ void Greeting(void);
 #define	SPEEDZERO	0x00	// Speed
 
 //Step Response
-#define MAXSAMPLES 0x3e7	//Maximum samples collected when measuring step response
+#define MAXSAMPLES 0x3e7	//999 - Maximum samples collected when measuring step response
 
 //Command line extension definitions
 #define CustomCmdIdOffset	0x20	//identifier of the first custom command, "G 'X'"
@@ -543,7 +543,7 @@ extern	BYTE	CmdSource;
 #define VERBOSITY_DISABLED				0x00
 #define VERBOSITY_LEVEL_ERROR 			0x01
 #define VERBOSITY_LEVEL_WARNING			0x02
-#define VERBOSITY_LEVEL_STATUS1 		0x04
+#define VERBOSITY_LEVEL_STATUS 		    0x04
 #define VERBOSITY_LEVEL_DEBUG			0x08
 
 #define VERBOSITY_USE_CALL_INFO			0x40
@@ -558,8 +558,8 @@ extern	BYTE	CmdSource;
 } while(0)
 #define ERROR_MSG(ARGS)				PRINT_VERBOSITY_MSG("ERROR!:\t",VERBOSITY_LEVEL_ERROR,ARGS)
 #define WARNING_MSG(ARGS)			PRINT_VERBOSITY_MSG("WARNING:\t",VERBOSITY_LEVEL_WARNING,ARGS)
-#define STATUS1_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS1,ARGS)
-#define DEBUG_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_DEBUG,ARGS)
+#define STATUS_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS,ARGS)
+#define DEBUG_MSG(ARGS)			    PRINT_VERBOSITY_MSG("DEBUG:\t",VERBOSITY_LEVEL_DEBUG,ARGS)
 
 #define PRINT_VERBOSITY_MSG(TYPE,VERBOSITY_LEVEL, ARGS) do { \
 	if(SCFG != TEcfg) break;\
