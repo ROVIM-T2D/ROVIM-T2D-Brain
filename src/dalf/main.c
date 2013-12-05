@@ -115,8 +115,8 @@ WORD	PulseConvert(WORD Pulse);	// PulseWidth ticks to microseconds
 WORD	AdcToVbatt(WORD v6);		// AN6 mV to Vbatt mV
 
 	// Move Motor 
-void	SoftStop(BYTE mtr);			// Stop Motor, leaving mode unchanged.
-void	MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
+//void	SoftStop(BYTE mtr);			// Stop Motor, leaving mode unchanged.
+//BYTE	MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
 void	MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a);
 
 	// Output
@@ -1237,10 +1237,10 @@ void SoftStop(BYTE mtr)
 	ARG[2] = SPEEDZERO;
 	ARG[3] = AMINP;
 	ARGN = 0x04;
-	TeCmdDispatch();
+	TeCmdDispatchExt();
 }
 //-----------------------------------------------------------------------------
-void MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew)
+BYTE MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew)
 {
 	CMD = 'X';
 	ARG[0] = mtr;
@@ -1248,7 +1248,7 @@ void MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew)
 	ARG[2] = spd;
 	ARG[3] = slew;
 	ARGN = 0x04;
-	TeCmdDispatch();
+	return TeCmdDispatchExt();
 }
 //-----------------------------------------------------------------------------
 void MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a)
@@ -1263,7 +1263,7 @@ void MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a)
 	ARG[6] = (BYTE) (a>>8);
 	ARG[7] = (BYTE)	(a & 0xFF);
 	ARGN = 0x08;
-	TeCmdDispatch();
+	TeCmdDispatchExt();
 }
 //-----------------------------------------------------------------------------
 
@@ -2714,9 +2714,15 @@ void Svc0(void)			// TMR0: Heartbeat (1msec)
 	//     R A M P I N G      S E R V I C E S      //
 	/////////////////////////////////////////////////
 	RampMotor1();			// Conditionally ramp mtr1
-	//OpenLoopTune1();		// Conditional mtr1 open loop response output
+	if(TIMESVC & Vsp1Msk)	// If time to sample Motor Position
+	{
+		OpenLoopTune1();	// Conditional mtr1 open loop response output
+	}
 	RampMotor2();			// Conditionally ramp mtr2
-	//OpenLoopTune1();		// Conditional mtr2 open loop response output
+	if(TIMESVC & Vsp2Msk)	// If time to sample Motor Position
+	{
+		OpenLoopTune2();	// Conditional mtr2 open loop response output
+	}
 
 
 	////////////////////////////////////////

@@ -212,6 +212,8 @@ ExternalAppSupportFcts* GetExternalAppSupportFcts(void);
 BYTE CmdExt_OpenLoopStepResp(void);
 void OpenLoopTune1(void);
 void OpenLoopTune2(void);
+void SoftStop(BYTE mtr);
+BYTE MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
 
 //support functions
 void DEBUG_PrintCmd(void);
@@ -444,7 +446,9 @@ void Greeting(void);
 #define		triga_Msk		0x01	// Bit0 - Waiting for Closed Loop Trigger
 
 // Mtrx_Flags2 bits
-#define		OL_stepresp		0x40	// Bit6 - "1"=Measuring motor open loop step response
+//XXX Mtrx_Flags2 uses more bits than shown here (highest value caught = 0x1E).
+//XXX Q: Should I use another flag carrier, to be sure i'm not overwritting anything?
+#define		OL_stepresp		0x80	// Bit7 - "1"=Measuring motor open loop step response
 #define		_MtrD_mask		0x20	// Bit5 - "1"=Reverse
 #define		DisableMsk		0x01	// Bit0	- "1"=Disable all Mtr commands
 

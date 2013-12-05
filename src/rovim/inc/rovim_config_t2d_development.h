@@ -26,7 +26,7 @@
 #define WATCHDOG_PERIOD 0xFA		//250 ms
 
 //use maximum verbosity
-#define INIT_VERBOSITY_LEVEL 0x8F	//disable call info verbosity for now, due to the issue with the #line directive
+#define INIT_VERBOSITY_LEVEL 0x0F	//disable call info verbosity for now, due to the issue with the #line directive
 
 //Default sample period for the expanded gpios
 #define IO_SAMPLE_PERIOD 0xC8		//200 ms

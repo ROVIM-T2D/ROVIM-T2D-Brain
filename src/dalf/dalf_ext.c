@@ -28,10 +28,12 @@
 #include "dalf.h"
 
 ExternalAppSupportFcts	ExternalFcts = {0};		//by default there is no external app
-static BYTE verbosity = VERBOSITY_DISABLED; //controls the verbosity of the debug information
+static BYTE verbosity = VERBOSITY_DISABLED; 	//controls the verbosity of the debug information
 
 WORD OL2Limit = 0;
 WORD OL1Limit = 0;
+WORD nol1 = 0;                      // Motor1 Open Loop step response output count
+WORD nol2 = 0;                      // Motor2 Open Loop step response output count
 ///////////////////////////////////////////////////////////////////////////////
 //Debug reporting features.
 ///////////////////////////////////////////////////////////////////////////////
@@ -219,8 +221,7 @@ BYTE CmdExt_OpenLoopStepResp(void)
 	//Command format: "G 1 n_samplesH n_samplesL [CmdX args]"
 	
 	//validade input
-	//#args check: we expect one or two bytes for the number of samples, and we can recover if the acc is not specified
-	//XXX: ARGN inclui o nome do comando, ou apenas os seus argumentos??????????
+	//#args check: we can recover if the acc is not specified
 	if ( !((ARGN >= 6) && (ARGN <= 7)) ) return eNumArgsErr;
 	
 	samples = ARG[1];
@@ -230,41 +231,39 @@ BYTE CmdExt_OpenLoopStepResp(void)
 		WARNING_MSG("Number of samples will be limited to the maximum permited, %d.\r\n", MAXSAMPLES);
 		samples = MAXSAMPLES;
 	}
-	//prepare command for execution
-	if (ARG[3] == '1')
+	else if (!samples) return eParmErr;
+
+	if (ARG[3] == 1)
 	{
 		Mtr1_Flags2 |= OL_stepresp;
 		OL1Limit = samples;
 	}
 	else	//erroneous values will be detecting when executing the 'X' command
 	{
+		ARG[3] = 2;
 		Mtr2_Flags2 |= OL_stepresp;
 		OL2Limit = samples;
 	}
-	CMD = 'X';
-	ARG[0] = ARG[3];
-	ARG[1] = ARG[4];
-	ARG[2] = ARG[5];
-	ARG[3] = 1;			//Let's limit the acceleration a bit, to avoid possible damage to the drivetrain
-	ARGN -= 3;
-	if (ARGN == 3)
+	if (ARGN == 7)
 	{
-		ARGN++;
-	}
-	else
-	{
-		ARGN = 4;		//just making sure
 		WARNING_MSG("Overriding acceleration control input. Using maximum acceleration possible\r\n");
 	}
-	DEBUG_PrintCmd();	//XXX temp
-	STATUS_MSG("Sample time = 1ms; number of samples = %d\r\n",samples); 	//Heartbeat timer
+	//print important information about step response measurement
+	mempoint[0] = (WORD*) 0x0137;		//VSP1
+	mempoint[1] = (WORD*) 0x014D;		//VSP2
+	memstack[0] = *(mempoint[(ARG[3]-1)]);
+	STATUS_MSG("Sample time = %d ms; number of samples = %d\r\n",memstack[0], samples); 	//Heartbeat timer
+	
+	nol1 = nol2 = 0;
 	mempoint[0] = (WORD*) 0x012B;		//AMINP
 	memstack[0] = *(mempoint[0]);		//push the current memory configuration
 	*(mempoint[0]) = ARG[3];
 
 	//Do the motor movement command
-	err = TeCmdDispatchExt();
-	
+	DEBUG_MSG("applying step to system input\r\n");
+	err = MoveMtrOpenLoop(ARG[3],ARG[4],ARG[5],1); //Let's limit the acceleration a bit, to avoid possible damage to the drivetrain
+	DEBUG_MSG("Step applied to system input\r\n");
+
 	*(mempoint[0]) = memstack[0];		//pull the saved memory configuration
 	if (err != NoErr)
 	{
@@ -321,7 +320,7 @@ void UnlockMotorsAccess(void)
 
 void OpenLoopTune2(void)	// Mtr2 PID Tuning Aid: Open Loop Verbose output	
 {
-	BYTE index=0;
+	//BYTE index=0;
 
 	///////////////////////////////////////////////////////////////////////
 	// Conditionally display position for Mtr2.                          //
@@ -333,14 +332,15 @@ void OpenLoopTune2(void)	// Mtr2 PID Tuning Aid: Open Loop Verbose output
 	//                                                                   //
 	///////////////////////////////////////////////////////////////////////
 	if(	(Mtr2_Flags2 & OL_stepresp) &&
+		(nol2 < OL2Limit) &&
 		(MTR2_MODE3 & VerboseMsk))
 	{ // If something to do, ..
 		//----------------------------
 		if(CmdSource == TE_SrcMsk)
 		{ // TE Mode: Xmit line to TE
-			index++;
-			if(index==1) printf("STEP RESPONSE:2\r\n");
-			printf("%3d:%+6Hd\r\n", index,encode2);
+			nol2++;
+			if(nol2==1) printf("OPEN LOOP STEP RESPONSE:2\r\n");
+			printf("%3d:%+6Hd\r\n", nol2,encode2);
 		} // If TE
 		//----------------------------
 		/* TODO: I2C interface not yet supported
@@ -376,12 +376,12 @@ void OpenLoopTune2(void)	// Mtr2 PID Tuning Aid: Open Loop Verbose output
 		//----------------------------
 	} // something to do
 	
-	if (index == OL2Limit)
+	if ((nol2 == OL2Limit) && (Mtr2_Flags2 & OL_stepresp))
 	{
 		OL2Limit = 0;
-		CMD = 'O';
-		ARGN = 0;
-		TeCmdDispatch();
+		Mtr2_Flags2 &= ~OL_stepresp;
+		nol2 = 0;
+		SoftStop(2);
 	}
 }
 
@@ -399,14 +399,15 @@ void OpenLoopTune1(void)	// Mtr1 PID Tuning Aid: Open Loop Verbose output
 	//                                                                   //
 	///////////////////////////////////////////////////////////////////////
 	if(	(Mtr1_Flags2 & OL_stepresp) &&
+		(nol1 < OL1Limit) &&
 		(MTR1_MODE3 & VerboseMsk))
 	{ // If something to do, ..
 		//----------------------------
 		if(CmdSource == TE_SrcMsk)
 		{ // TE Mode: Xmit line to TE
-			index++;
-			if(index==1) printf("STEP RESPONSE:1\r\n");
-			printf("%3d:%+6Hd\r\n", index,encode1);
+			nol1++;
+			if(nol1==1) printf("OPEN LOOP STEP RESPONSE:1\r\n");
+			printf("%3d:%+6Hd\r\n", nol1,encode1);
 		} // If TE
 		//----------------------------
 		/* TODO: I2C interface not yet supported
@@ -442,11 +443,12 @@ void OpenLoopTune1(void)	// Mtr1 PID Tuning Aid: Open Loop Verbose output
 		//----------------------------
 	} // something to do
 	
-	if (index == OL1Limit)
+	if ((nol1 == OL1Limit) && (Mtr1_Flags2 & OL_stepresp))
 	{
 		OL1Limit = 0;
-		CMD = 'O';
-		ARGN = 0;
-		TeCmdDispatch();
+		Mtr1_Flags2 &= ~OL_stepresp;
+		nol1 = 0;
+		SoftStop(1);
+
 	}
 }

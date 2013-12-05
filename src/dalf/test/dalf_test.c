@@ -46,12 +46,24 @@ void TEST_InDevelopmentTesting(void)
 	BYTE GPIOBank2;
 	
 	BYTE InitVerbosity = GetVerbosity();
+	if(SCFG == TEcfg)
+	{
+		printf("Default verbosity = %x\r\n",InitVerbosity);
+	}
 
 // command line test - got it
 	CMD = 0xA;
 	ARGN = 0;
 	TeCmdDispatchExt();
+	if(SCFG == TEcfg)
+	{
+		printf("Sent ack (ENTER) as a command\r\n");
+	}
 	
+	if(SCFG == TEcfg)
+	{
+		printf("Sending 'C' as a command\r\n");
+	}
 	CMD = 'C';
 	ARGN = 0;
 	TeCmdDispatchExt();
@@ -62,7 +74,7 @@ void TEST_InDevelopmentTesting(void)
 	GetTime(&now);
 	if(SCFG == TEcfg)
 	{
-		printf("Elapsed time = %lu\r\n",now.secs);
+		printf("\nElapsed time = %lu\r\n",now.secs);
 		printf("Elapsed ticks = %u\r\n",now.ticks);
 	}
 	
