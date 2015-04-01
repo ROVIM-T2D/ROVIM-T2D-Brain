@@ -8,6 +8,6 @@ It is based on the original software provided by Embedded Electronics with the D
 Copyright:
 All non-proprietary content is licensed under the terms of the GNU General Public License, version 3 (GPL-3.0).
 
-Author: Gonçalo André
+Author: Gonçalo André;
 Sponsors: António Joaquim Serralheiro;
 Contributors: Gonçalo André;
