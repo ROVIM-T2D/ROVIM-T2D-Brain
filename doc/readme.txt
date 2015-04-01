@@ -6,7 +6,7 @@ Motor Control Board.
 
 The recommended project options are:
 Language Toolsuite:
-		Microchip C18 Toolsuite
+		Microchip C18 Toolsuite v3.10
 
 
 Build Environment:
