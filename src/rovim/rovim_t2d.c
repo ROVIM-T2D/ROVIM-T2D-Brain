@@ -30,7 +30,7 @@
 
 void ROVIM_T2D_Init(void)
 {
-	SetExternalAppSupportFcts(ROVIM_T2D_Greeting, ROVIM_T2D_CustomCmdDispatch, ROVIM_T2D_ServiceIO);
+	//SetExternalAppSupportFcts(ROVIM_T2D_Greeting, ROVIM_T2D_CustomCmdDispatch, ROVIM_T2D_ServiceIO);
 	ioexpcount = IO_SAMPLE_PERIOD;
 	SetVerbosity (INIT_VERBOSITY_LEVEL);
 	
@@ -87,6 +87,5 @@ BOOL ROVIM_T2D_ValidateInitialState(void)
 
 void ROVIM_T2D_ServiceIO(void)
 {
-	ioexpcount = IO_SAMPLE_PERIOD;
 	return;
 }

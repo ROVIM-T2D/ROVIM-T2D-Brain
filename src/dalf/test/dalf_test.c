@@ -1,4 +1,4 @@
-//#line 1 "dalf_test.c"			//work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+#line 1 "dalf_test.c"			//work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
 //cannot set breakpoints if this directive is used:
 //info: http://www.microchip.com/forums/m105540-print.aspx
 //uncomment only when breakpoints are no longer needed
@@ -41,145 +41,153 @@ void TEST_InDevelopmentTesting(void)
 {
 	TIME now;
 	TIME then;
-	
+	TIME later;
+	DWORD ms=0;
+	BYTE x=1;
 	BYTE GPIOBank1;
 	BYTE GPIOBank2;
-	
 	BYTE InitVerbosity = GetVerbosity();
-	if(SCFG == TEcfg)
-	{
-		printf("Default verbosity = %x\r\n",InitVerbosity);
-	}
 
-// command line test - got it
+	if(SCFG != TEcfg)
+	{
+		return; //we need serial port to use the printf() in these tests
+	}
+	printf("Starting some testing of the dalf features\r\n");
+
+	printf("Testing the command line now\r\n");
+	/* not used for now
 	CMD = 0xA;
 	ARGN = 0;
 	TeCmdDispatchExt();
-	if(SCFG == TEcfg)
-	{
-		printf("Sent ack (ENTER) as a command\r\n");
-	}
+	printf("Sent ack (ENTER) as a command\r\n");*/
 	
-	if(SCFG == TEcfg)
-	{
-		printf("Sending 'C' as a command\r\n");
-	}
+	printf("Sending 'C' as a command. Should see the A/D readings\r\n");
 	CMD = 'C';
 	ARGN = 0;
 	TeCmdDispatchExt();
-//
+	printf("Command line testing done\r\n");
 
-// Testing the time and a little bit stressing on the main, low priority task
-	
+	printf("Testing the time now\r\n");
+	//Now lets wait x.3 secs before reprinting the time
+	//Unfortunately this is a busy wait and cannot be used in real applications
+
+	printf("Doing a busy wait of %d.3 secs\r\n",x);
 	GetTime(&now);
-	if(SCFG == TEcfg)
-	{
-		printf("\nElapsed time = %lu\r\n",now.secs);
-		printf("Elapsed ticks = %u\r\n",now.ticks);
-	}
-	
-	//Now let's wait 10.3 secs before reprinting the time
-	SetDelay(&then,2,msec_300);
+	ms=TIME_TO_MSEC(now);
+	printf("secs before = %lu; ticks before = %u; msecs before= %ld\r\n",now.secs, now.ticks, ms);
+	SetDelay(&then,x,msec_300);
 	while(!Timeout(&then));
-	if(SCFG == TEcfg)
-	{
-		printf("New Elapsed time = %lu\r\n",then.secs);
-		printf("New Elapsed ticks = %u\r\n",then.ticks);
-	}
-	printf("\r\n");
-//
+	ms=TIME_TO_MSEC(then);
+	printf("secs after= %lu; ticks after= %u; msecs after= %ld\r\n",then.secs, then.ticks, ms);
+	printf("delay (ms)= %ld\r\n", CalculateDelayMs(&now, &then));
+	printf("Timing testing done\r\n");
 
 	//test the macros for file and line number - for now the __FILE__ macro isn't processing the backslashes correctly
-	if(SCFG == TEcfg)
-	{
-		printf("__FILE__: "__FILE__"; line: %d\r\n\r\n",__LINE__);
-	}
+	printf("Testing __FILE__ and __LINE__ macros. The __FILE__ macro may not be eating backslashes. If so, uncomment 1st line of file.\r\n");
+	printf("File: "__FILE__"; line: %d\r\n",__LINE__);
+	printf("Macros testing done\r\n");
 
 	// verbosity test
-	SetVerbosity(VERBOSITY_DISABLED);
+	//Remember that fatal error includes always timestamp and caller information
+	printf("Starting verbosity macros test. Remember that fatal error always includes timestamp and call info.\r\n");
+	SetVerbosity(VERBOSITY_DISABLED); //Prints fatal error
+	printf("Prints fatal error:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
-	//Now, let's enable it one by one
-	SetVerbosity(VERBOSITY_USE_TIMESTAMP);
+	SetVerbosity(VERBOSITY_USE_TIMESTAMP); //Prints fatal error
+	printf("Prints fatal error:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
-	SetVerbosity(VERBOSITY_USE_CALL_INFO);
+	SetVerbosity(VERBOSITY_USE_CALL_INFO); //Prints fatal error
+	printf("Prints fatal error:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
-	SetVerbosity(VERBOSITY_LEVEL_ERROR);
+	SetVerbosity(VERBOSITY_LEVEL_ERROR); //Prints error & fatal error
+	printf("Prints error & fatal error:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_WARNING);
+	SetVerbosity(VERBOSITY_LEVEL_WARNING); //Prints warning & fatal error
+	printf("Prints warning & fatal error:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS);
+	SetVerbosity(VERBOSITY_LEVEL_STATUS); //Prints fatal error & status
+	printf("Prints fatal error & status:\r\n");
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_DEBUG);
+	SetVerbosity(VERBOSITY_LEVEL_DEBUG); //Prints fatal error & debug
+	printf("Prints fatal error & debug:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_LEVEL_DEBUG | VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_TIMESTAMP | VERBOSITY_USE_CALL_INFO);
+	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_LEVEL_DEBUG | VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_TIMESTAMP | VERBOSITY_USE_CALL_INFO); //Prints status, debug, warning, error & fatal error, all with timestamp & call info
+	printf("Prints status, debug, warning, error & fatal error, all with timestamp & call info:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO);
+	SetVerbosity(VERBOSITY_LEVEL_WARNING | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO); //Prints warning w/call info, fatal error & error w/call info
+	printf("Prints warning w/call info, fatal error & error w/call info:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_USE_TIMESTAMP | VERBOSITY_LEVEL_DEBUG);
+	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_USE_TIMESTAMP | VERBOSITY_LEVEL_DEBUG); //Prints status & debug w/timestamp & fatal error
+	printf("Prints status & debug w/timestamp & fatal error:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 
-	SetVerbosity(VERBOSITY_LEVEL_WARNING);
+	SetVerbosity(VERBOSITY_LEVEL_WARNING); //Prints warning & fatal error
+	printf("Prints warning & fatal error:\r\n");
 	STATUS_MSG("Hello, Dalf-1F World! Verbosity=%02X\r\n",GetVerbosity());
 	FATAL_ERROR_MSG("Not really a fatal error. Verbosity = %02X\r\n",GetVerbosity());
 	DEBUG_MSG("Not really a status message! Verbosity=%02X\r\n",GetVerbosity());
 	WARNING_MSG("OMFG, it works! Verbosity=%02X\r\n",GetVerbosity());
 	ERROR_MSG("Gotcha! It's not a real error, sherlock! Verbosity=%02X\r\n",GetVerbosity());
 	
-	printf("\r\n");
-// /* verbosity test */
+	printf("Now testing the delay in a message.\r\n");
+	GetTime(&then);
+	FATAL_ERROR_MSG("Just measuring a FATAL_ERROR_MSG processing time\r\n");
+	GetTime(&later);
+	printf("Worst case scenario verbosity message processing time (does not include serial port\
+flushing)=%ld ms\r\n",CalculateDelayMs(&then,&later));
+	
+	printf("Ends verbosity tests\r\n");
 
-	/*IO expander testing - understood*/
-	/* Bank1 = J6*/
-
+	printf("Testing expandable I/O now\r\n");
 	SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_USE_TIMESTAMP);
 	STATUS_MSG("Initial read from GPIO bank 1, port B1\r\n");
 	GPIOBank1 = ReadIOExp1(0x01);
@@ -314,9 +322,10 @@ void TEST_InDevelopmentTesting(void)
 	STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
 	GPIOBank1 = ReadIOExp1(0x15);
 	STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
+	printf("Expandable I/O testing done\r\n");
 	
 	SetVerbosity(InitVerbosity);
-	printf("\r\n");
+	printf("All testing done. Resuming normal operation\r\n");
 //
 	return;
 }

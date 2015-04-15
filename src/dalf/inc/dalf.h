@@ -82,6 +82,7 @@
 typedef	unsigned char	BYTE, UCHAR;		//  8 bits; [0 .. 255]
 typedef	unsigned int	WORD, UINT, USHORT;	// 16 bits; [0 .. 65,535]
 typedef	unsigned long	DOUBLE, ULONG;		// 32 bits; [0 .. 4,294,967,295]
+typedef long			LONG, DWORD;		// 32 bits signed;
 typedef UCHAR BOOL;
 
 
@@ -96,9 +97,12 @@ typedef struct
 	ULONG  secs;
 	WORD ticks;
 } TIME, *PTIME;
+
+extern	BYTE	SECS, MINS, HOURS;		// RTC variables
+extern	ULONG	Seconds;				// Seconds since boot 
 //-----------------------------------------------------------------------
 
-
+/* TODO: remove
 //-----------------------------------------------------------------------
 // External functions used to customize the Dalf firmware to run other
 // applications on top of it.
@@ -112,7 +116,7 @@ typedef struct
 	greeting				GreetingFct;
 	cmdExtensionDispatch 	CmdExtensionDispatchFct;
 	serviceIO 				ServiceIOFct;
-}ExternalAppSupportFcts;
+}ExternalAppSupportFcts;*/
 
 //-----------------------------------------------------------------------
 
@@ -198,7 +202,7 @@ void SystemInitExt(void);
 void InitWatchdog(void);
 void KickWatchdog(void);
 #endif
-PTIME GetCurrentTime(void);
+DWORD CalculateDelayMs(PTIME start, PTIME end);
 void EmergencyStopMotors(void);
 void LockMotorsAccess(void);
 void UnlockMotorsAccess(void);
@@ -206,14 +210,15 @@ BYTE TeCmdDispatchExt(void);
 BYTE I2C2CmdDispatchExt(void);
 BYTE TeProcessAck(void);
 BYTE TE_CmdParseExt(void);
+/* TODO: remove
 BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
 	CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr);
 ExternalAppSupportFcts* GetExternalAppSupportFcts(void);
-BYTE CmdExt_OpenLoopStepResp(void);
+BYTE CmdExt_OpenLoopStepResp(void);*/
 void OpenLoopTune1(void);
 void OpenLoopTune2(void);
 void SoftStop(BYTE mtr);
-BYTE MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
+void MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
 
 //support functions
 void DEBUG_PrintCmd(void);
@@ -226,7 +231,6 @@ BYTE ShowHelp(void);
 void LOG_LogInit(void);
 #endif
 
-//Custom applications functions
 void Greeting(void);
 
 // External switches used for pot control modes
@@ -391,6 +395,7 @@ void Greeting(void);
 #define msec_400	13107	// 400 msec
 #define	msec_500	16384	// 500 mSec
 #define	msec_750	24576	// 750 msec
+#define sec_1		32768	// 1   sec
 
 // TIMESVC_REQ Bits
 #define	Vsp1Msk		0x01	// Bit0
@@ -543,6 +548,8 @@ extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
 extern BYTE	MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
 extern	BYTE	CmdSource;
 
+#define TIME_TO_MSEC(x) ((x.secs*1000) + (x.ticks>>5))
+
 //Verbosity level mask
 #define VERBOSITY_DISABLED				0x00
 #define VERBOSITY_LEVEL_ERROR 			0x01
@@ -557,23 +564,27 @@ extern	BYTE	CmdSource;
 //Q: Why on earth would you do such a long macro?
 //A: Because idk how to properly pass variable # of arguments to a subfunction...
 #define FATAL_ERROR_MSG(ARGS)		do { \
-	SetVerbosity( (GetVerbosity()) | VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO | VERBOSITY_USE_TIMESTAMP); \
+	BYTE auxVerbosity = GetVerbosity(); \
+	SetVerbosity(VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO | VERBOSITY_USE_TIMESTAMP); \
 	PRINT_VERBOSITY_MSG("FATAL ERROR!!:\t",VERBOSITY_LEVEL_ERROR,ARGS); \
+	SetVerbosity(auxVerbosity); \
 } while(0)
 #define ERROR_MSG(ARGS)				PRINT_VERBOSITY_MSG("ERROR!:\t",VERBOSITY_LEVEL_ERROR,ARGS)
 #define WARNING_MSG(ARGS)			PRINT_VERBOSITY_MSG("WARNING:\t",VERBOSITY_LEVEL_WARNING,ARGS)
 #define STATUS_MSG(ARGS)			PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS,ARGS)
 #define DEBUG_MSG(ARGS)			    PRINT_VERBOSITY_MSG("DEBUG:\t",VERBOSITY_LEVEL_DEBUG,ARGS)
 
+/*Remember that the __LINE__ macro says it is one line above the actual line on the .c, because of
+the 1st line workaround; so we fix it here*/
 #define PRINT_VERBOSITY_MSG(TYPE,VERBOSITY_LEVEL, ARGS) do { \
 	if(SCFG != TEcfg) break;\
 	if(GetVerbosity() & VERBOSITY_LEVEL) { \
 		printf(TYPE); \
 		if (GetVerbosity() & VERBOSITY_USE_CALL_INFO) { \
-			printf("File: "__FILE__"; Line:%d:\t",__LINE__); \
+			printf("File: "__FILE__"; Line:%d:\t",(__LINE__-1)); \
 		} \
 		if (GetVerbosity() & VERBOSITY_USE_TIMESTAMP) { \
-			printf("Elapsed Time: %lu s\t",GetCurrentTime()->secs); \
+			printf("Elapsed Time: %lu s\t",Seconds); \
 		} \
 	printf(ARGS); \
 	} \

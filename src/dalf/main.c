@@ -77,15 +77,7 @@
 #include	<stdio.h>
 
 //choose the configuration profile
-#ifdef DALF_CONFIG_DEFAULT
-	#include	"dalf_config_default.h"
-#else
-#ifdef DALF_CONFIG_ROVIM_T2D
-	#include	"rovim.h"							/* description and configuration of the ROVIM system */
-#else
-	#error No configuration profile defined! Please define a configuration profile.
-#endif /*DALF_CONFIG_ROVIM_T2D*/
-#endif /*DALF_CONFIG_DEFAULT*/
+#include	"rovim.h"							/* description and configuration of the ROVIM system */
 
 #ifdef DALF_TEST_ENABLED
 	#include	"dalf_test.h"							/* testing and debugging features */
@@ -94,6 +86,7 @@
 /* Function Prototypes */
 void	ISRHI ( void );
 void	ISRLO ( void );
+//void	Greeting(void);				// Terminal emulator greeting
 
 	// Command Handling
 void	SerialCmdDispatch(void);	// USART1 or I2C2 control
@@ -118,10 +111,11 @@ WORD	AdcToVbatt(WORD v6);		// AN6 mV to Vbatt mV
 
 	// Move Motor 
 //void	SoftStop(BYTE mtr);			// Stop Motor, leaving mode unchanged.
-//BYTE	MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
+//void	MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
 void	MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a);
 
 	// Output
+//int		printf(const rom char *fmt, ...);
 void	ReturnData(void);		// Return data and/or status to cmd initiator.
 void	DispCHR(void);			// xCHR 
 void	DispE(void);			// Motor Position (encoder) 
@@ -235,11 +229,12 @@ extern	BYTE	BOARD_ID;					// Board ID char
 extern	BYTE	MAJOR_ID;					// Software major ID byte
 extern	BYTE	MINOR_ID;					// Software minor ID byte
 extern	WORD	USERID;						// PIC_USERID[3..0] concatenated
+//extern	BYTE	SCFG;						// Serial Configuration (1..3)
 
 extern	WORD	SERVICE, SERVICE_REQ;		// Requests from ISR's
 extern	BYTE	TIMESVC, TIMESVC_REQ;		// Timed requests
-extern	BYTE	SECS, MINS, HOURS;			// RTC variables
-extern	ULONG	Seconds;					// Seconds since boot 
+//extern	BYTE	SECS, MINS, HOURS;		// RTC variables
+//extern	ULONG	Seconds;				// Seconds since boot 
 extern	BYTE	ADC0[7];					// ADC readings AN0..AN6
 extern	BYTE	Pkt[134];					// Max size (API) N+6 = 128+6 = 134
 extern	WORD	DispSvc;					// "Display" service requests
@@ -281,7 +276,9 @@ extern	short long	ErrDiff2;				// Motor2 PID Err Diff (dErr/dT)
 extern	short long	ErrSum2;				// Motor2 PID Err Sum
 
 
+//extern	BYTE	CMD,ARG[16],ARGN;
 extern	BYTE	ReturnN;					// Commmand Interface 
+//extern	BYTE	CmdSource;
 
 extern	BYTE	LedErr;						// "1" bits flag err cond'n
 
@@ -565,7 +562,6 @@ void	Greeting(void)
 		printf("18F6722 Rev:%02X\r\n", (PIC_DEVID1 & 0x1F));		// Micro ID
 		printf("Software Ver:%2u.%02u\r\n",MAJOR_ID, MINOR_ID);		// Software ID
 		printf("User: %05u\r\n",USERID);							// User ID
-		printf("\r\n");
 	}
 }
 //-----------------------------------------------------------------------------
@@ -1242,7 +1238,7 @@ void SoftStop(BYTE mtr)
 	TeCmdDispatchExt();
 }
 //-----------------------------------------------------------------------------
-BYTE MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew)
+void MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew)
 {
 	CMD = 'X';
 	ARG[0] = mtr;
@@ -1250,7 +1246,7 @@ BYTE MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew)
 	ARG[2] = spd;
 	ARG[3] = slew;
 	ARGN = 0x04;
-	return TeCmdDispatchExt();
+	TeCmdDispatchExt();
 }
 //-----------------------------------------------------------------------------
 void MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a)
@@ -2688,12 +2684,9 @@ void Svc0(void)			// TMR0: Heartbeat (1msec)
 
 	// Conditionally service on-board LED's
 	ledcount--;	if(!ledcount) { ledcount=LED_PERIOD; ServiceLED(); }
-	if(GetExternalAppSupportFcts()->ServiceIOFct)
-	{
-		ioexpcount--;if(!ioexpcount) { GetExternalAppSupportFcts()->ServiceIOFct(); }
-	}
+	ioexpcount--;if(!ioexpcount) { ioexpcount=IO_SAMPLE_PERIOD; ROVIM_T2D_ServiceIO(); }
 #ifdef WATCHDOG_ENABLED
-	watchdogcount--; if(!watchdogcount) {watchdogcount = WATCHDOG_PERIOD; KickWatchdog(); }
+	watchdogcount--; if(!watchdogcount) {watchdogcount=WATCHDOG_PERIOD; KickWatchdog(); }
 #endif
 #ifdef DALF_TEST_ENABLED
 	//TEST_Svc0();
@@ -2716,15 +2709,17 @@ void Svc0(void)			// TMR0: Heartbeat (1msec)
 	//     R A M P I N G      S E R V I C E S      //
 	/////////////////////////////////////////////////
 	RampMotor1();			// Conditionally ramp mtr1
+	/*TODO: no longer used
 	if(TIMESVC & Vsp1Msk)	// If time to sample Motor Position
 	{
 		OpenLoopTune1();	// Conditional mtr1 open loop response output
-	}
+	}*/
 	RampMotor2();			// Conditionally ramp mtr2
+	/*TODO: no longer used
 	if(TIMESVC & Vsp2Msk)	// If time to sample Motor Position
 	{
 		OpenLoopTune2();	// Conditional mtr2 open loop response output
-	}
+	}*/
 
 
 	////////////////////////////////////////
@@ -2968,7 +2963,6 @@ void main (void)
 
 	//XXX: this initialization order really has to be studied and tested, and validated.
 
-	//XXX: I do not like this like this: rovim t2d was supposed to be isolated from
 	ROVIM_T2D_Init();		//ROVIM System Initialization
 
 	//XXX: Not sure if this can stay here, or has to be moved to beyond the interrupt
@@ -3000,14 +2994,7 @@ void main (void)
 	WinkLEDS();				// Wink LED's to indicate power on reset.
 	_LED3_ON;				// Visual error indication due to the brake being locked
 
-	if (GetExternalAppSupportFcts()->GreetingFct)
-	{
-		GetExternalAppSupportFcts()->GreetingFct();				// Terminal Emulator Greeting
-	}
-	else
-	{
-		Greeting();
-	}
+	ROVIM_T2D_Greeting();
 
 	/* Check if the system is in a good, non-dangerous state before prooceding */
 	

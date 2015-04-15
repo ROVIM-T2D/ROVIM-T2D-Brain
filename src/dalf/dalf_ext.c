@@ -26,8 +26,10 @@
 ******************************************************************************/
 
 #include "dalf.h"
+#include "rovim.h"
 
-ExternalAppSupportFcts	ExternalFcts = {0};		//by default there is no external app
+//TODO: remove
+//ExternalAppSupportFcts	ExternalFcts = {0};		//by default there is no external app
 static BYTE verbosity = VERBOSITY_DISABLED; 	//controls the verbosity of the debug information
 
 WORD OL2Limit = 0;
@@ -77,11 +79,24 @@ BYTE GetVerbosity(void)
 	return verbosity;
 }
 
-PTIME GetCurrentTime(void)
+/*
+To convert ticks to ms we divide by 32 instead of 33, to speed the calculation.
+This creates an error that maxes at 24ms, or 2.4%. This is an acceptable trade-off
+*/
+DWORD CalculateDelayMs(PTIME start, PTIME end)
 {
-	TIME now;
-	GetTime(&now);
-	return &now;
+	ULONG i=0,j=0;
+	if ((start==NULL) || (end==NULL))
+	{
+		return -1;
+	}
+	i=TIME_TO_MSEC((*end));
+	j=TIME_TO_MSEC((*start));
+	if (j > i)
+	{
+		return -1;
+	}
+	return (DWORD)(i-j);
 }
 
 
@@ -127,6 +142,7 @@ void KickWatchdog(void)
 
 #endif
 
+/*TODO: remove
 BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
 	CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr)
 {
@@ -146,7 +162,7 @@ BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
 ExternalAppSupportFcts* GetExternalAppSupportFcts(void)
 {
 	return &ExternalFcts;
-}
+}*/
 
 /**
 \Brief Call the actions required to execute a command
@@ -166,21 +182,19 @@ BYTE TeCmdDispatchExt(void)
 		case 'G':
 			switch (ARG[0])
 			{
-				case 1:
-					return CmdExt_OpenLoopStepResp();
-					break;
+				/*custom functions index:
+				this is to be used if we want other custom functions
+				other than ROVIM_T2D ones. They must be inserted here, 
+				to be parsed before calling the ROVIM dispatch*/
 				default:
 					break;
 			}
-			if (ExternalFcts.CmdExtensionDispatchFct)
-			{
-				return ExternalFcts.CmdExtensionDispatchFct();
-			}
-			return eParseErr;
+			return ROVIM_T2D_CustomCmdDispatch();
 			break;
+		/* XXX: this is an advanced feature. For now is unused
 		case 0xA:
 			return TeProcessAck();
-			break;
+			break;*/
 		default:
 			return TeCmdDispatch();
 			break;
@@ -193,6 +207,9 @@ BYTE TeCmdDispatchExt(void)
 */
 BYTE TE_CmdParseExt(void)
 {
+	return TE_CmdParse();
+	
+	/*XXX: this is an advanced feature. For now is unused
 	BYTE err;
 	//since, if the command is wrong, the CMD varible won't be updated, we have
 	//to work around it. It isn't pretty, but the only option is to delve into
@@ -208,9 +225,55 @@ BYTE TE_CmdParseExt(void)
 	else
 	{
 		return err;
-	}
+	}*/
 }
 
+BYTE I2C2CmdDispatchExt(void)
+{
+	return I2C2CmdDispatch();
+}
+
+#ifdef HELP_ENABLED
+
+BYTE ShowHelp(void)
+{
+	return eDisable;
+}
+
+#endif
+
+/*XXX: this is an advanced feature. For now is unused
+BYTE TeProcessAck(void)
+{
+	return eDisable;
+}*/
+
+void RegisterCmdhelp(void)
+{
+	return;
+}
+
+void EmergencyStopMotors(void)
+{
+	//XXX is there a more failsafe method to stop the motors??
+	CMD = 'O';
+	ARGN = 0x00;
+	TeCmdDispatchExt();
+	return;
+}
+
+void LockMotorsAccess(void)
+{
+	return;
+}
+
+void UnlockMotorsAccess(void)
+{
+	return;
+}
+
+#if 0
+//TODO: to remove. Functions no longer needed
 BYTE CmdExt_OpenLoopStepResp(void)
 {
 	BYTE err = NoErr;
@@ -261,7 +324,7 @@ BYTE CmdExt_OpenLoopStepResp(void)
 
 	//Do the motor movement command
 	DEBUG_MSG("applying step to system input\r\n");
-	err = MoveMtrOpenLoop(ARG[3],ARG[4],ARG[5],1); //Let's limit the acceleration a bit, to avoid possible damage to the drivetrain
+	/*err = */MoveMtrOpenLoop(ARG[3],ARG[4],ARG[5],1); //Let's limit the acceleration a bit, to avoid possible damage to the drivetrain
 	DEBUG_MSG("Step applied to system input\r\n");
 
 	*(mempoint[0]) = memstack[0];		//pull the saved memory configuration
@@ -273,49 +336,6 @@ BYTE CmdExt_OpenLoopStepResp(void)
 	}
 
 	return err;
-}
-
-BYTE I2C2CmdDispatchExt(void)
-{
-	return I2C2CmdDispatch();
-}
-
-#ifdef HELP_ENABLED
-
-BYTE ShowHelp(void)
-{
-	return eDisable;
-}
-
-#endif
-
-BYTE TeProcessAck(void)
-{
-	return eDisable;
-}
-
-void RegisterCmdhelp(void)
-{
-	return;
-}
-
-void EmergencyStopMotors(void)
-{
-	//XXX is there a more failsafe method to stop the motors??
-	CMD = 'O';
-	ARGN = 0x00;
-	TeCmdDispatchExt();
-	return;
-}
-
-void LockMotorsAccess(void)
-{
-	return;
-}
-
-void UnlockMotorsAccess(void)
-{
-	return;
 }
 
 void OpenLoopTune2(void)	// Mtr2 PID Tuning Aid: Open Loop Verbose output	
@@ -452,3 +472,4 @@ void OpenLoopTune1(void)	// Mtr1 PID Tuning Aid: Open Loop Verbose output
 
 	}
 }
+#endif
