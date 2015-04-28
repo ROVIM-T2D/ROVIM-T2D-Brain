@@ -142,28 +142,6 @@ void KickWatchdog(void)
 
 #endif
 
-/*TODO: remove
-BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
-    CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr)
-{
-    if( (GreetingFctPtr == NULL) || (CmdExtensionDispatchFctPtr == NULL) || (ServiceIOFctPtr == NULL))
-    {
-        ERROR_MSG("Trying to register a NULL function\r\n");
-        return eParmErr;
-    }
-
-    ExternalFcts.GreetingFct = GreetingFctPtr;
-    ExternalFcts.CmdExtensionDispatchFct = CmdExtensionDispatchFctPtr;
-    ExternalFcts.ServiceIOFct = ServiceIOFctPtr;
-
-    return NoErr;
-}
-
-ExternalAppSupportFcts* GetExternalAppSupportFcts(void)
-{
-    return &ExternalFcts;
-}*/
-
 /**
 \Brief Call the actions required to execute a command
 */
@@ -233,26 +211,27 @@ BYTE I2C2CmdDispatchExt(void)
     return I2C2CmdDispatch();
 }
 
-#ifdef HELP_ENABLED
-
-BYTE ShowHelp(void)
-{
-    return eDisable;
-}
-
-#endif
-
 /*XXX: this is an advanced feature. For now is unused
 BYTE TeProcessAck(void)
 {
     return eDisable;
 }*/
 
+#ifdef HELP_ENABLED
+// Help submodule ----------------------------------------------------------------------------------
+BYTE ShowHelp(void)
+{
+    return eDisable;
+}
+
 void RegisterCmdhelp(void)
 {
     return;
 }
 
+#endif
+
+// Motor stopping submodule ------------------------------------------------------------------------
 void EmergencyStopMotors(void)
 {
     //XXX is there a more failsafe method to stop the motors??
@@ -271,6 +250,110 @@ void UnlockMotorsAccess(void)
 {
     return;
 }
+
+// GPIO sub-driver ---------------------------------------------------------------------------------
+
+BOOL SetGPIOConfig(const IOPinId* config)
+{
+    //this is not yet parameter-defined, as intended.
+    WriteIOExp2(0x00, 0xAA);
+    WriteIOExp2(0x01, 0x55);
+    WriteIOExp2(0x02,0x10); //Set pin 5 as inverted
+    WriteIOExp2(0x03,0x40); //set pin 10 as inverted
+    // Disable pull-ups
+    WriteIOExp2(0x0C,0x00);
+    WriteIOExp2(0x0D,0x00);
+}
+
+//both parameters must point to valid variables. Space won't be allocated here
+BOOL GetGPIOConfig(char* name, IOPinId* config)
+{
+    BYTE dir=0, pullup=0, inverted=0;
+    
+    if(!GetDefaultGPIOConfigbyName(name, config)){
+        config=NULL;
+        return FALSE;
+    }
+    
+    if(config.exp == J5){
+        dir=ReadIOExp2(0x00 + PIN_IN_BANK_B_OFFSET(config.number));
+        inverted=ReadIOExp2(0x02 + PIN_IN_BANK_B_OFFSET(config.number));
+        pullup=ReadIOExp2(0x0C + PIN_IN_BANK_B_OFFSET(config.number));
+    }
+    else{
+        dir=ReadIOExp1(0x00 + PIN_IN_BANK_B_OFFSET(config.number));
+        inverted=ReadIOExp1(0x02 + PIN_IN_BANK_B_OFFSET(config.number));
+        pullup=ReadIOExp1(0x0C + PIN_IN_BANK_B_OFFSET(config.number));
+    }
+    dir= (dir & PIN_ACCESS_MASK(config.number)) >> PIN_ACCESS_OFFSET;
+    inverted= (inverted & PIN_ACCESS_MASK(config.number)) >> PIN_ACCESS_OFFSET;
+    pullup= (pullup & PIN_ACCESS_MASK(config.number)) >> PIN_ACCESS_OFFSET;
+    config.dir= dir? IN: OUT;
+    config.inverted= inverted? ON: OFF;
+    config.pullup= pullup? ON: OFF;
+    
+    return TRUE;
+}
+
+//both parameters must point to valid variables. Space won't be allocated here
+BOOL GetDefaultGPIOConfigbyName(char* name, IOPinId* config)
+{
+    for(i=0; i<ngpios; i++){
+        if(strcmp(DefaultGPIOsConfig[i].name, name) == 0){
+            memcpy(config,DefaultGPIOsConfig[i],sizeof(DefaultGPIOsConfig[i]));
+            return TRUE;
+        }
+    }
+
+    config=NULL;
+    return FALSE;
+}
+
+BOOL SetGPIO(char* name)
+{
+    return TRUE;
+}
+
+BOOL ResetGPIO(char* name)
+{
+    return TRUE;
+}
+
+BOOL ToggleGPIO(char* name)
+{
+    return TRUE;
+}
+
+BOOL GetGPIO(char* name)
+{
+    return TRUE;
+}
+
+//--------------------------------------------------------------------------------------------------
+//-------------------------------------Unused section-----------------------------------------------
+//--------------------------------------------------------------------------------------------------
+
+/*TODO: remove
+BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
+    CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr)
+{
+    if( (GreetingFctPtr == NULL) || (CmdExtensionDispatchFctPtr == NULL) || (ServiceIOFctPtr == NULL))
+    {
+        ERROR_MSG("Trying to register a NULL function\r\n");
+        return eParmErr;
+    }
+
+    ExternalFcts.GreetingFct = GreetingFctPtr;
+    ExternalFcts.CmdExtensionDispatchFct = CmdExtensionDispatchFctPtr;
+    ExternalFcts.ServiceIOFct = ServiceIOFctPtr;
+
+    return NoErr;
+}
+
+ExternalAppSupportFcts* GetExternalAppSupportFcts(void)
+{
+    return &ExternalFcts;
+}*/
 
 #if 0
 //TODO: to remove. Functions no longer needed

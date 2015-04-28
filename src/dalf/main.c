@@ -2971,7 +2971,7 @@ void main (void)
     ROVIM_T2D_LockBrake();  // Lock the brakes as soon as possible - safety first
     
 #ifdef DALF_TEST_ENABLED
-    TEST_TestInit();        //Testing Module Initialization
+    //TEST_TestInit();        //Testing Module Initialization
 #endif
 
 #ifdef LOG_ENABLED
@@ -3016,7 +3016,7 @@ void main (void)
     //continuously monitor the changes we're doing, to avoid bigger troubles in the
     //future
 #ifdef DALF_TEST_ENABLED
-    TEST_InDevelopmentTesting();
+    //TEST_InDevelopmentTesting();
 #endif
     
 

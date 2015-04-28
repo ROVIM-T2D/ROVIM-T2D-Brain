@@ -27,8 +27,10 @@
 #include "dalf.h"
 #include <stdio.h>
 
-#pragma romdata iopins
-static rom const IOPinId IOPins[]={
+#pragma romdata defaultgpiosconfig
+//there was no space in this file's standard initialized data section for this structure, so I had
+//to move it to program data.
+static rom const IOPinId DefaultGPIOsConfig[]={
     /*name,                exp, number,   dir,   pullup, inverted*/
     { "uC travar",          J5,    1,      OUT,    OFF,   OFF },
     { "Unused",             J5,    2,      INOUT,  OFF,   OFF },
@@ -36,17 +38,19 @@ static rom const IOPinId IOPins[]={
     { "Unused",             J5,    4,      INOUT,  OFF,   OFF },
     { "uC tracao ON",       J5,    5,      OUT,    OFF,   ON  },
     { "erro SigmaD",        J5,    6,      IN,     OFF,   OFF },
-    { "uC travao mao",      J5,    7,      OUT,    OFF,   OFF },
+    { "uC destravar",       J5,    7,      OUT,    OFF,   OFF },
     { "Int emrg NA",        J5,    8,      IN,     OFF,   OFF },
     { "uC marcha-tras",     J5,    9,      OUT,    OFF,   OFF },
     { "Fusível+guita",      J5,    10,     IN,     OFF,   ON  },
-    { "uC marcha-frente",   J5,    9,      OUT,    OFF,   OFF },
+    { "uC marcha-frente",   J5,    11,     OUT,    OFF,   OFF },
     { "F.C. DIR",           J5,    12,     IN,     OFF,   OFF },
     { "uC Parar",           J5,    13,     OUT,    OFF,   OFF },
     { "Unused",             J5,    14,     INOUT,  OFF,   OFF },
-    { "uC Parar",           J5,    15,     INOUT,  OFF,   OFF },
+    { "Unused",             J5,    15,     INOUT,  OFF,   OFF },
     { "Auto",               J5,    16,     IN,     OFF,   OFF }
 };
+
+const BYTE ngpios= BYTE (sizeof(DefaultGPIOsConfig)/sizeof(DefaultGPIOsConfig[0]));
 #pragma romdata
 
 void ROVIM_T2D_Init(void)
@@ -54,7 +58,10 @@ void ROVIM_T2D_Init(void)
     //SetExternalAppSupportFcts(ROVIM_T2D_Greeting, ROVIM_T2D_CustomCmdDispatch, ROVIM_T2D_ServiceIO);
     ioexpcount = IO_SAMPLE_PERIOD;
     SetVerbosity (INIT_VERBOSITY_LEVEL);
-    
+    //Set uneven numbered pins as output(starting count on 1), and even pins as input
+    for (i=0; i<ngpios; i++) {
+        ROVIM_T2D_ConfigGPIO(&(DefaultGPIOsConfig[i]));
+    }
     return;
 }
 
@@ -72,12 +79,14 @@ void ROVIM_T2D_Greeting(void)
 
 BYTE ROVIM_T2D_CustomCmdDispatch(void)
 {
-    
-    switch(CMD)
+    switch(ARG[0])
     {
         case CustomCmdIdOffset:
-            break;
+            ROVIM_T2D_LockBrake();
+            return NoErr;
         case (CustomCmdIdOffset + 1):
+            ROVIM_T2D_UnlockBrake();
+            return NoErr;
             break;
         //Add more ROVIM commands here
         default:
@@ -88,11 +97,20 @@ BYTE ROVIM_T2D_CustomCmdDispatch(void)
 
 BOOL ROVIM_T2D_LockBrake(void)
 {
+    STATUS_MSG("Braking now\r\n");
+    IOReads=ReadIOExp2(0x13);
+    IOReads|=0x08;
+    WriteIOExp2(0x13,IOReads);
     return TRUE;
 }
 
 BOOL ROVIM_T2D_UnlockBrake(void)
 {
+    STATUS_MSG("Debraking now\r\n");
+    SetGPIO();
+    IOReads=ReadIOExp2(0x12);
+    IOReads|=0x04;
+    WriteIOExp2(0x12,IOReads);
     return TRUE;
 }
 

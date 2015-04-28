@@ -116,7 +116,9 @@ typedef enum{
     ON
 }IOPinFeature;
 
-#define IO_PIN_NAME_MAX_LEN 20  //max length for a I/O pin name, including the '\0' string 
+#define IO_PIN_NAME_MAX_LEN 20  //max length for a I/O pin name, including the '\0' string
+#define PIN_IN_BANK_B_OFFSET?(X) (x>8?1:0) //used to access configuration pins for bank b without further logic
+#define PIN_ACCESS_MASK(X) ()
 //terminating character
 
 //this structure describes a pin in a real aplication in a way an unexperienced user can understand
