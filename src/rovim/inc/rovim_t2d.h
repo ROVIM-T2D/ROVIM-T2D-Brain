@@ -27,10 +27,13 @@
 
 //Function prototypes
 void ROVIM_T2D_Init(void);
+void ROVIM_T2D_Start(void);
+void ROVIM_T2D_ConfigGPIOs(void);
+void ROVIM_T2D_ReleaseFromLockdown(void);
+void ROVIM_T2D_Lockdown(void);
 void ROVIM_T2D_Greeting(void);
 BOOL ROVIM_T2D_LockBrake(void);
 BOOL ROVIM_T2D_UnlockBrake(void);
-BOOL ROVIM_T2D_ReadVehicleState(void);
 BOOL ROVIM_T2D_ValidateInitialState(void);
 BYTE ROVIM_T2D_CustomCmdDispatch(void);
 void ROVIM_T2D_ServiceIO(void);

@@ -116,10 +116,10 @@ typedef enum{
     ON
 }IOPinFeature;
 
-#define IO_PIN_NAME_MAX_LEN 20  //max length for a I/O pin name, including the '\0' string
-#define PIN_IN_BANK_B_OFFSET?(X) (x>8?1:0) //used to access configuration pins for bank b without further logic
-#define PIN_ACCESS_MASK(X) ()
-//terminating character
+#define IO_PIN_NAME_MAX_LEN 30  //max length for a I/O pin name, including the '\0' string
+#define IOEXP_REG_BANK_OFFSET(X) (X>8?1:0) //used to access configuration pins for bank b without further logic
+#define IOEXP_PIN_BIT_OFFSET(X) (X>8?16-X:X-1) //calculates the number of shifts to get the pin's bit
+
 
 //this structure describes a pin in a real aplication in a way an unexperienced user can understand
 typedef struct{
@@ -131,6 +131,17 @@ typedef struct{
     IOPinFeature    inverted;
 }IOPinId;
 
+BOOL SetGPIOConfig(IOPinId* config);
+BOOL GetGPIOConfig(const rom char* name, IOPinId* config);
+BOOL GetDefaultGPIOConfigbyName(const rom char* name, IOPinId* config);
+BOOL SetGPIO(const rom char* name);
+BOOL ResetGPIO(const rom char* name);
+BOOL ToggleGPIO(const rom char* name);
+BOOL GetGPIO(const rom char* name, BYTE* value);
+BOOL GetAllGPIO(BYTE* J5A, BYTE* J5B, BYTE* J6A, BYTE* J6B);
+
+extern rom const IOPinId DefaultGPIOsConfig[];
+extern const BYTE ngpios;
 //-----------------------------------------------------------------------
 // 16-bit Timer1 runs at 32,768 Hz and is preloaded with 0x8000 in order to 
 // generate periodic 1-sec interrupts.  This timer also supports timeout
@@ -606,8 +617,6 @@ extern  BYTE    CmdSource;
 #define VERBOSITY_USE_TIMESTAMP         0x80
 
 //Verbosity print macros
-//Q: Why on earth would you do such a long macro?
-//A: Because idk how to properly pass variable # of arguments to a subfunction...
 #define FATAL_ERROR_MSG(ARGS)       do { \
     BYTE auxVerbosity = GetVerbosity(); \
     SetVerbosity(VERBOSITY_LEVEL_ERROR | VERBOSITY_USE_CALL_INFO | VERBOSITY_USE_TIMESTAMP); \

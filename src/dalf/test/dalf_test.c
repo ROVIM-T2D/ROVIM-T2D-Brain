@@ -27,6 +27,7 @@
 
 #include "dalf.h"
 #include "dalf_test.h"
+#include "rovim_t2d.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -44,9 +45,15 @@ void TEST_TestInit(void)
         return; //we need serial port to use the printf() in these tests
     }
     printf("Testing boot-up time: %ld ms\r\n",CalculateDelayMs(&start,&stop));
+    
+    printf("\r\nAll testing done. Reverting all configurations and resuming normal operation\r\n");
+    ROVIM_T2D_Init();
+    ROVIM_T2D_Start();
     return;
 }
 
+//This function is used to test ad-hoc the various features I'm developing
+//and to better understand how the system works.
 void TEST_InDevelopmentTesting(void)
 {
     TIME now;
@@ -202,141 +209,6 @@ flushing)=%ld ms\r\n",CalculateDelayMs(&then,&later));
     printf("Ends verbosity tests\r\n");
 
     printf("Testing expandable I/O now\r\n");
-    /*SetVerbosity(VERBOSITY_LEVEL_STATUS | VERBOSITY_USE_TIMESTAMP);
-    STATUS_MSG("Initial read from GPIO bank 1, port B1\r\n");
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now writting FF's on the same GPIOs\r\n");
-    WriteIOExp1(0x13,0xFF);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now writting 0x0F on the same GPIOs\r\n");
-    WriteIOExp1(0x13,0x0F);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now writing 0x0F on the direction register of the same GPIOs\r\n");
-    WriteIOExp1(0x01,0x0F);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now, with half of GPIOs direction changed, writting 0x33 on them\r\n");
-    WriteIOExp1(0x13,0x33);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now, with 0x0F on the direction and 0x33 on the GPIOs value, write 0xAA on their polarity\r\n");
-    WriteIOExp1(0x03,0xAA);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now, let's change the pull up. write 0x6C on that register\r\n");
-    WriteIOExp1(0x0D,0x6C);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now,let's try to write 0xCC to the output latch and see what happens\r\n");
-    WriteIOExp1(0x15,0xCC);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    
-    STATUS_MSG("Now, with the output latches all pumped up, let's change the direction of the GPIOs and see what happens\r\n");
-    WriteIOExp1(0x01,0xF0);
-    GPIOBank1 = ReadIOExp1(0x01);
-    STATUS_MSG("GPIO Direction=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x03);
-    STATUS_MSG("Input Polarity=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0B);
-    STATUS_MSG("Configuration=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x0D);
-    STATUS_MSG("Weak Pullup=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x13);
-    STATUS_MSG("GPIO Value=%02X\r\n",GPIOBank1);
-    GPIOBank1 = ReadIOExp1(0x15);
-    STATUS_MSG("Output Latch=%02X\r\n",GPIOBank1);
-    printf("Expandable I/O testing done\r\n");*/
     
     printf("Now testing I/O pins to be used for input\r\n");
     printf("Configuring all registers as input\r\n");
@@ -380,6 +252,8 @@ using this configuration:\r\n");
     //of the I/O expanders after testing. If you want to do that, you must comment that action below
     
     printf("\r\nAll testing done. Reverting all configurations and resuming normal operation\r\n");
-    SetVerbosity(InitVerbosity);
+    ROVIM_T2D_Init();
+    ROVIM_T2D_Start();
+    
     return;
 }

@@ -2965,13 +2965,10 @@ void main (void)
 
     ROVIM_T2D_Init();       //ROVIM System Initialization
 
-    //XXX: Not sure if this can stay here, or has to be moved to beyond the interrupt
-    //init. Nor am I sure on how to test this.
-    EmergencyStopMotors();  // Stop any motor that might be running
-    ROVIM_T2D_LockBrake();  // Lock the brakes as soon as possible - safety first
+    ROVIM_T2D_Lockdown();  // Lock the brakes as soon as possible - safety first
     
 #ifdef DALF_TEST_ENABLED
-    //TEST_TestInit();        //Testing Module Initialization
+    TEST_TestInit();        //Testing Module Initialization
 #endif
 
 #ifdef LOG_ENABLED
@@ -2992,31 +2989,26 @@ void main (void)
 #endif
 
     WinkLEDS();             // Wink LED's to indicate power on reset.
-    _LED3_ON;               // Visual error indication due to the brake being locked
 
     ROVIM_T2D_Greeting();
 
     /* Check if the system is in a good, non-dangerous state before prooceding */
     
-    ROVIM_T2D_ReadVehicleState();
-    //XXX: criar um enum com os estados inciais possiveis 
     if ( FALSE != ROVIM_T2D_ValidateInitialState() )
     {
         /* The vehicle is good to go */
-        ROVIM_T2D_UnlockBrake();
-        UnlockMotorsAccess();
-        _LED3_OFF;
+        ROVIM_T2D_ReleaseFromLockdown();
     }
     else
     {
-        /* bypass all motor movement commands */
-        LockMotorsAccess();
+        //XXX: Should I do something else here? Like wait indefinitely?
     }
 
+    ROVIM_T2D_Start();
     //continuously monitor the changes we're doing, to avoid bigger troubles in the
     //future
 #ifdef DALF_TEST_ENABLED
-    //TEST_InDevelopmentTesting();
+    TEST_InDevelopmentTesting();
 #endif
     
 

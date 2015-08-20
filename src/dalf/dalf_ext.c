@@ -27,6 +27,7 @@
 
 #include "dalf.h"
 #include "rovim.h"
+#include <string.h>
 
 //TODO: remove
 //ExternalAppSupportFcts    ExternalFcts = {0};     //by default there is no external app
@@ -101,7 +102,7 @@ DWORD CalculateDelayMs(PTIME start, PTIME end)
 
 
 ///////////////////////////////////////////////////////////////////////////////
-//Logging features. This module is only compiled it the features are enabled.
+//Logging features. This module is only compiled if the features are enabled.
 ///////////////////////////////////////////////////////////////////////////////
 
 
@@ -147,6 +148,7 @@ void KickWatchdog(void)
 */
 BYTE TeCmdDispatchExt(void)
 {
+    //XXX: create the lock motors access feature here
     DEBUG_PrintCmd();
     switch(CMD)
     {
@@ -231,16 +233,6 @@ void RegisterCmdhelp(void)
 
 #endif
 
-// Motor stopping submodule ------------------------------------------------------------------------
-void EmergencyStopMotors(void)
-{
-    //XXX is there a more failsafe method to stop the motors??
-    CMD = 'O';
-    ARGN = 0x00;
-    TeCmdDispatchExt();
-    return;
-}
-
 void LockMotorsAccess(void)
 {
     return;
@@ -253,79 +245,279 @@ void UnlockMotorsAccess(void)
 
 // GPIO sub-driver ---------------------------------------------------------------------------------
 
-BOOL SetGPIOConfig(const IOPinId* config)
+BOOL SetGPIOConfig(IOPinId* config)
 {
-    //this is not yet parameter-defined, as intended.
-    WriteIOExp2(0x00, 0xAA);
-    WriteIOExp2(0x01, 0x55);
-    WriteIOExp2(0x02,0x10); //Set pin 5 as inverted
-    WriteIOExp2(0x03,0x40); //set pin 10 as inverted
-    // Disable pull-ups
-    WriteIOExp2(0x0C,0x00);
-    WriteIOExp2(0x0D,0x00);
+    BYTE pre_dir=0, pre_pullup=0, pre_inverted=0, aux=0, post_dir=0, post_pullup=0, post_inverted=0;
+    
+    //parameter check
+    if(config == NULL){
+        return FALSE;
+    }
+    
+    //Get current IOEXP bank config
+    if(config->exp == J5){
+        pre_dir=ReadIOExp2(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
+        pre_inverted=ReadIOExp2(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
+        pre_pullup=ReadIOExp2(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
+    }
+    else{
+        pre_dir=ReadIOExp1(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
+        pre_inverted=ReadIOExp1(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
+        pre_pullup=ReadIOExp1(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
+    }
+    
+    //Change the configuration of only the GPIO under treatment
+    aux= config->inverted==ON? 0xFF:0;
+    post_inverted = pre_inverted ^( (aux ^ pre_inverted) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
+    aux= config->pullup==ON? 0xFF:0;
+    post_pullup = pre_pullup ^( (aux ^ pre_pullup) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
+    aux= config->dir==IN? 0xFF:0;
+    post_dir = pre_dir ^( (aux ^ pre_dir) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
+    
+    //Write the new configuration
+    if(config->exp == J5){
+        WriteIOExp2(IODIRA + IOEXP_REG_BANK_OFFSET(config->number), post_dir);
+        WriteIOExp2(IPOLA + IOEXP_REG_BANK_OFFSET(config->number), post_inverted);
+        WriteIOExp2(GPPUA + IOEXP_REG_BANK_OFFSET(config->number), post_pullup);
+    }
+    else{
+        WriteIOExp1(IODIRA + IOEXP_REG_BANK_OFFSET(config->number), post_dir);
+        WriteIOExp1(IPOLA + IOEXP_REG_BANK_OFFSET(config->number), post_inverted);
+        WriteIOExp1(GPPUA + IOEXP_REG_BANK_OFFSET(config->number), post_pullup);
+    }
+    
+    DEBUG_MSG("SetGPIOConfig: pin=%d, bank offset=%d, bit offset=%d. Previous: dir=%08b, inv=%08b, pull=%08b\
+. Intermediate calculations (for dir only): aux=%08b, aux^pre_dir=%08b, 1U<<offset=%08b, (aux^pre_dir) & (1U<<offset)\
+=%08b. Current: dir=%08b, inv=%08b, pull=%08b\r\n", config->number, IOEXP_REG_BANK_OFFSET(config->number),\
+IOEXP_PIN_BIT_OFFSET(config->number), pre_dir, pre_inverted, pre_pullup, aux, (aux ^ pre_dir),\
+ (1U << IOEXP_PIN_BIT_OFFSET(config->number)), \
+ ((aux ^ pre_dir) & (1U << IOEXP_PIN_BIT_OFFSET(config->number))), post_dir, post_inverted, \
+ post_pullup);
+    return TRUE;
 }
 
 //both parameters must point to valid variables. Space won't be allocated here
-BOOL GetGPIOConfig(char* name, IOPinId* config)
+BOOL GetGPIOConfig(const rom char* name, IOPinId* config)
 {
-    BYTE dir=0, pullup=0, inverted=0;
+    BYTE dir=0, pullup=0, inverted=0, aux=0;
+    
+    if(config == NULL){
+        return FALSE;
+    }
+    if(name == NULL){
+        return FALSE;
+    }
     
     if(!GetDefaultGPIOConfigbyName(name, config)){
         config=NULL;
         return FALSE;
     }
     
-    if(config.exp == J5){
-        dir=ReadIOExp2(0x00 + PIN_IN_BANK_B_OFFSET(config.number));
-        inverted=ReadIOExp2(0x02 + PIN_IN_BANK_B_OFFSET(config.number));
-        pullup=ReadIOExp2(0x0C + PIN_IN_BANK_B_OFFSET(config.number));
+    //read the IOEXP bank configuration
+    if(config->exp == J5){
+        dir=ReadIOExp2(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
+        inverted=ReadIOExp2(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
+        pullup=ReadIOExp2(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
     }
     else{
-        dir=ReadIOExp1(0x00 + PIN_IN_BANK_B_OFFSET(config.number));
-        inverted=ReadIOExp1(0x02 + PIN_IN_BANK_B_OFFSET(config.number));
-        pullup=ReadIOExp1(0x0C + PIN_IN_BANK_B_OFFSET(config.number));
+        dir=ReadIOExp1(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
+        inverted=ReadIOExp1(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
+        pullup=ReadIOExp1(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
     }
-    dir= (dir & PIN_ACCESS_MASK(config.number)) >> PIN_ACCESS_OFFSET;
-    inverted= (inverted & PIN_ACCESS_MASK(config.number)) >> PIN_ACCESS_OFFSET;
-    pullup= (pullup & PIN_ACCESS_MASK(config.number)) >> PIN_ACCESS_OFFSET;
-    config.dir= dir? IN: OUT;
-    config.inverted= inverted? ON: OFF;
-    config.pullup= pullup? ON: OFF;
     
+    //get and translate the configuration for the GPIO under treatment
+    aux= (dir >> IOEXP_PIN_BIT_OFFSET(config->number)) & 1U;
+    config->dir= aux? IN: OUT;
+    aux= (inverted >> IOEXP_PIN_BIT_OFFSET(config->number)) & 1U;
+    config->inverted= aux? ON: OFF;
+    aux= (pullup >> IOEXP_PIN_BIT_OFFSET(config->number)) & 1U;
+    config->pullup= aux? ON: OFF;
+    
+    DEBUG_MSG("GetGPIOConfig: pin=%d, bank offset=%d, bit offset=%d. dir=%08b,%d, inv=%08b,%d, pull=%08b,\
+%d.\r\n", config->number, IOEXP_REG_BANK_OFFSET(config->number), IOEXP_PIN_BIT_OFFSET(config->number), \
+dir, config->dir, inverted, config->inverted, pullup, config->pullup );
     return TRUE;
 }
 
-//both parameters must point to valid variables. Space won't be allocated here
-BOOL GetDefaultGPIOConfigbyName(char* name, IOPinId* config)
+//String constants are automatically stored in rom. See MPLAB C-18 Users guide, 2.73.
+//So, the first argument is in fact rom qualified.
+//However, there is no strncmppgm2pgm - outstanding!
+BOOL GetDefaultGPIOConfigbyName(const rom char* name, IOPinId* config)
 {
+    BYTE i=0;
+    char aux[IO_PIN_NAME_MAX_LEN]={0};
+    
+    if(config == NULL){
+        return FALSE;
+    }
+    if(name == NULL){
+        return FALSE;
+    }
+   
     for(i=0; i<ngpios; i++){
-        if(strcmp(DefaultGPIOsConfig[i].name, name) == 0){
-            memcpy(config,DefaultGPIOsConfig[i],sizeof(DefaultGPIOsConfig[i]));
+        //copy the first argument to ram, to be able to use it on strncmppgm2ram
+        strncpypgm2ram(aux, name, IO_PIN_NAME_MAX_LEN);
+        if(strncmppgm2ram(aux, DefaultGPIOsConfig[i].name, IO_PIN_NAME_MAX_LEN) == 0){
+            memcpypgm2ram(config,&(DefaultGPIOsConfig)[i],sizeof(*config));
+            //cannot print config->name because printf like functions 
+            //"expect the format string to be stored in program memory"
+            DEBUG_MSG("GetDefaultGPIOConfigbyName: matching name found:%s\r\n", aux);
             return TRUE;
         }
     }
 
+    ERROR_MSG("GetDefaultGPIOConfigbyName could not find a matching GPIO\r\n");
     config=NULL;
     return FALSE;
 }
 
-BOOL SetGPIO(char* name)
+BOOL SetGPIO(const rom char* name)
 {
+    BYTE pre_value=0, post_value;
+    IOPinId config;
+
+    if(name == NULL){
+        return FALSE;
+    }
+
+    if(!GetDefaultGPIOConfigbyName(name, &config)){
+        return FALSE;
+    }
+    
+    //Get current IOEXP bank gpios
+    if(config.exp == J5){
+        pre_value=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    else{
+        pre_value=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    
+    //Change the configuration of only the GPIO under treatment
+    post_value = pre_value | (1U << IOEXP_PIN_BIT_OFFSET(config.number));
+    
+    //Write the new value
+    if(config.exp == J5){
+        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+    }
+    else{
+        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+    }
+    
+    DEBUG_MSG("SetGPIO: pin=%d, previous GPIO bank %c  value=%08b, new value=%08b\r\n",\
+    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), pre_value, post_value);
     return TRUE;
 }
 
-BOOL ResetGPIO(char* name)
+BOOL ResetGPIO(const rom char* name)
 {
+    BYTE pre_value=0, post_value=0;
+    IOPinId config;
+
+    if(name == NULL){
+        return FALSE;
+    }
+
+    if(!GetDefaultGPIOConfigbyName(name, &config)){
+        return FALSE;
+    }
+    
+    //Get current IOEXP bank gpios
+    if(config.exp == J5){
+        pre_value=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    else{
+        pre_value=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    
+    //Change the configuration of only the GPIO under treatment
+    post_value = pre_value & (~(1U << IOEXP_PIN_BIT_OFFSET(config.number)));
+    
+    //Write the new value
+    if(config.exp == J5){
+        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+    }
+    else{
+        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+    }
+
+    DEBUG_MSG("ResetGPIO: pin=%d, previous GPIO bank %c value=%08b, new value=%08b\r\n",\
+    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), pre_value, post_value);
     return TRUE;
 }
 
-BOOL ToggleGPIO(char* name)
+BOOL ToggleGPIO(const rom char* name)
 {
+    BYTE pre_value=0, post_value=0;
+    IOPinId config;
+
+    if(name == NULL){
+        return FALSE;
+    }
+
+    if(!GetDefaultGPIOConfigbyName(name, &config)){
+        return FALSE;
+    }
+    
+    //Get current IOEXP bank gpios
+    if(config.exp == J5){
+        pre_value=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    else{
+        pre_value=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    
+    post_value = pre_value ^ (1U << IOEXP_PIN_BIT_OFFSET(config.number));
+    
+    //Write the new value
+    if(config.exp == J5){
+        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+    }
+    else{
+        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+    }
+
+    DEBUG_MSG("ToggleGPIO: pin=%d, previous GPIO bank %c value=%08b, new value=%08b\r\n", \
+    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), pre_value, post_value);
     return TRUE;
 }
 
-BOOL GetGPIO(char* name)
+BOOL GetGPIO(const rom char* name, BYTE* value)
 {
+    IOPinId config;
+    BYTE aux=0;
+    
+    if(name == NULL){
+        return FALSE;
+    }
+    if(value == NULL){
+        return FALSE;
+    }
+    
+    if(!GetDefaultGPIOConfigbyName(name, &config)){
+        return FALSE;
+    }
+    
+    if(config.exp == J5){
+        aux=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    else{
+        aux=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+    }
+    
+    *value= (aux>> IOEXP_PIN_BIT_OFFSET(config.number)) & 1U;
+
+    DEBUG_MSG("GetGPIO: pin=%d, GPIO bank %c value=%08b,%d\r\n", \
+    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), aux, *value);
+    return TRUE;
+}
+
+BOOL GetAllGPIO(BYTE* J5A, BYTE* J5B, BYTE* J6A, BYTE* J6B)
+{
+    *J5A=ReadIOExp2(GPIOA);
+    *J6A=ReadIOExp1(GPIOA);
+    *J5B=ReadIOExp2(GPIOB);
+    *J6B=ReadIOExp1(GPIOB);
+    
     return TRUE;
 }
 
@@ -354,205 +546,3 @@ ExternalAppSupportFcts* GetExternalAppSupportFcts(void)
 {
     return &ExternalFcts;
 }*/
-
-#if 0
-//TODO: to remove. Functions no longer needed
-BYTE CmdExt_OpenLoopStepResp(void)
-{
-    BYTE err = NoErr;
-    BYTE memstack[2] = {0};     //stack for temporary save of memory configurations
-    WORD* mempoint[2] = {0};    //memory mapping of values saved on the stack
-    WORD samples = 0;
-    //Open loop motor step response
-    //Command format: "G 1 n_samplesH n_samplesL [CmdX args]"
-    
-    //validade input
-    //#args check: we can recover if the acc is not specified
-    if ( !((ARGN >= 6) && (ARGN <= 7)) ) return eNumArgsErr;
-    
-    samples = ARG[1];
-    samples = (samples << 8) | ARG[2];
-    if (samples > MAXSAMPLES)
-    {
-        WARNING_MSG("Number of samples will be limited to the maximum permited, %d.\r\n", MAXSAMPLES);
-        samples = MAXSAMPLES;
-    }
-    else if (!samples) return eParmErr;
-
-    if (ARG[3] == 1)
-    {
-        Mtr1_Flags2 |= OL_stepresp;
-        OL1Limit = samples;
-    }
-    else    //erroneous values will be detecting when executing the 'X' command
-    {
-        ARG[3] = 2;
-        Mtr2_Flags2 |= OL_stepresp;
-        OL2Limit = samples;
-    }
-    if (ARGN == 7)
-    {
-        WARNING_MSG("Overriding acceleration control input. Using maximum acceleration possible\r\n");
-    }
-    //print important information about step response measurement
-    mempoint[0] = (WORD*) 0x0137;       //VSP1
-    mempoint[1] = (WORD*) 0x014D;       //VSP2
-    memstack[0] = *(mempoint[(ARG[3]-1)]);
-    STATUS_MSG("Sample time = %d ms; number of samples = %d\r\n",memstack[0], samples);     //Heartbeat timer
-    
-    nol1 = nol2 = 0;
-    mempoint[0] = (WORD*) 0x012B;       //AMINP
-    memstack[0] = *(mempoint[0]);       //push the current memory configuration
-    *(mempoint[0]) = ARG[3];
-
-    //Do the motor movement command
-    DEBUG_MSG("applying step to system input\r\n");
-    /*err = */MoveMtrOpenLoop(ARG[3],ARG[4],ARG[5],1); //Let's limit the acceleration a bit, to avoid possible damage to the drivetrain
-    DEBUG_MSG("Step applied to system input\r\n");
-
-    *(mempoint[0]) = memstack[0];       //pull the saved memory configuration
-    if (err != NoErr)
-    {
-        OL2Limit = OL1Limit = 0;
-        Mtr1_Flags2 &= ~OL_stepresp;
-        Mtr2_Flags2 &= ~OL_stepresp;
-    }
-
-    return err;
-}
-
-void OpenLoopTune2(void)    // Mtr2 PID Tuning Aid: Open Loop Verbose output    
-{
-    //BYTE index=0;
-
-    ///////////////////////////////////////////////////////////////////////
-    // Conditionally display position for Mtr2.                          //
-    //                                                                   //
-    //  Primary usage: See "G1" Cmd.                                     //
-    //     Does nothing unless all conditions are met:                   //
-    //       1) open Loop Movement is happening.                         //
-    //       2) Verbose mode active.                                     //
-    //                                                                   //
-    ///////////////////////////////////////////////////////////////////////
-    if( (Mtr2_Flags2 & OL_stepresp) &&
-        (nol2 < OL2Limit) &&
-        (MTR2_MODE3 & VerboseMsk))
-    { // If something to do, ..
-        //----------------------------
-        if(CmdSource == TE_SrcMsk)
-        { // TE Mode: Xmit line to TE
-            nol2++;
-            if(nol2==1) printf("OPEN LOOP STEP RESPONSE:2\r\n");
-            printf("%3d:%+6Hd\r\n", nol2,encode2);
-        } // If TE
-        //----------------------------
-        /* TODO: I2C interface not yet supported
-        else if(CmdSource == I2C2_SrcMsk)
-        { // I2C2 Mode: Xmit in packets that contain 8 samples.
-            //
-            // index: ptr to 3-byte pos field within DATA portion of pkt
-            index = 2 + 3*(BYTE)(npid2 & 0x07);
-
-            npid2++;    
-            Pkt[index]=(Err2 & 0xFF);               // Low Byte
-            Pkt[index+1]=((Err2 >> 8) & 0xFF);      // Mid Byte
-            Pkt[index+2]=(Err2 >> 16);              // Hi Byte
-
-            // Special case: Test for partial last packet
-            if( ( npid2 == Pid2Limit ) && ( index != 23 ) )
-            {
-                for ( i = index; i <= 23; i+=3 )
-                { // Zero fill unused portion of DATA field
-                    Pkt[i]=0; Pkt[i+1]=0; Pkt[i+2]=0;
-                }
-                index = 23;
-            }
-
-            if( index == 23 )
-            { // Pkt full.  Time to send
-                Pkt[0]='Q';
-                Pkt[1]=24;          // 8 Err samples (3 bytes per sample)
-                PktLen=27;
-                SendI2C2Pkt();      // Transmit Pkt[].
-            }
-        } // If I2C2 */
-        //----------------------------
-    } // something to do
-    
-    if ((nol2 == OL2Limit) && (Mtr2_Flags2 & OL_stepresp))
-    {
-        OL2Limit = 0;
-        Mtr2_Flags2 &= ~OL_stepresp;
-        nol2 = 0;
-        SoftStop(2);
-    }
-}
-
-void OpenLoopTune1(void)    // Mtr1 PID Tuning Aid: Open Loop Verbose output    
-{
-    BYTE index=0;
-
-    ///////////////////////////////////////////////////////////////////////
-    // Conditionally display position for Mtr1.                          //
-    //                                                                   //
-    //  Primary usage: See "G1" Cmd.                                     //
-    //     Does nothing unless all conditions are met:                   //
-    //       1) open Loop Movement is happening.                         //
-    //       2) Verbose mode active.                                     //
-    //                                                                   //
-    ///////////////////////////////////////////////////////////////////////
-    if( (Mtr1_Flags2 & OL_stepresp) &&
-        (nol1 < OL1Limit) &&
-        (MTR1_MODE3 & VerboseMsk))
-    { // If something to do, ..
-        //----------------------------
-        if(CmdSource == TE_SrcMsk)
-        { // TE Mode: Xmit line to TE
-            nol1++;
-            if(nol1==1) printf("OPEN LOOP STEP RESPONSE:1\r\n");
-            printf("%3d:%+6Hd\r\n", nol1,encode1);
-        } // If TE
-        //----------------------------
-        /* TODO: I2C interface not yet supported
-        else if(CmdSource == I2C2_SrcMsk)
-        { // I2C2 Mode: Xmit in packets that contain 8 samples.
-            //
-            // index: ptr to 3-byte pos field within DATA portion of pkt
-            index = 2 + 3*(BYTE)(npid2 & 0x07);
-
-            npid2++;    
-            Pkt[index]=(Err2 & 0xFF);               // Low Byte
-            Pkt[index+1]=((Err2 >> 8) & 0xFF);      // Mid Byte
-            Pkt[index+2]=(Err2 >> 16);              // Hi Byte
-
-            // Special case: Test for partial last packet
-            if( ( npid2 == Pid2Limit ) && ( index != 23 ) )
-            {
-                for ( i = index; i <= 23; i+=3 )
-                { // Zero fill unused portion of DATA field
-                    Pkt[i]=0; Pkt[i+1]=0; Pkt[i+2]=0;
-                }
-                index = 23;
-            }
-
-            if( index == 23 )
-            { // Pkt full.  Time to send
-                Pkt[0]='Q';
-                Pkt[1]=24;          // 8 Err samples (3 bytes per sample)
-                PktLen=27;
-                SendI2C2Pkt();      // Transmit Pkt[].
-            }
-        } // If I2C2 */
-        //----------------------------
-    } // something to do
-    
-    if ((nol1 == OL1Limit) && (Mtr1_Flags2 & OL_stepresp))
-    {
-        OL1Limit = 0;
-        Mtr1_Flags2 &= ~OL_stepresp;
-        nol1 = 0;
-        SoftStop(1);
-
-    }
-}
-#endif
