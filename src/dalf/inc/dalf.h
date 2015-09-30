@@ -107,8 +107,7 @@ typedef enum{
 
 typedef enum{
     OUT,
-    IN,
-    INOUT
+    IN
 }IOPinDirection;
 
 typedef enum{
@@ -119,28 +118,33 @@ typedef enum{
 #define IO_PIN_NAME_MAX_LEN 30  //max length for a I/O pin name, including the '\0' string
 #define IOEXP_REG_BANK_OFFSET(X) (X>8?1:0) //used to access configuration pins for bank b without further logic
 #define IOEXP_PIN_BIT_OFFSET(X) (X>8?16-X:X-1) //calculates the number of shifts to get the pin's bit
+#define GPIOS_PER_EXPANDER 16 //the number of pins each I/O expander has
 
 
-//this structure describes a pin in a real aplication in a way an unexperienced user can understand
+//this structures describe a pin in a real aplication in a way an unexperienced user can understand
 typedef struct{
-    char            name[IO_PIN_NAME_MAX_LEN];
     IOExpander      exp;
     BYTE            number;
     IOPinDirection  dir;
     IOPinFeature    pullup;
     IOPinFeature    inverted;
-}IOPinId;
+}IOPinConfig;
 
-BOOL SetGPIOConfig(IOPinId* config);
-BOOL GetGPIOConfig(const rom char* name, IOPinId* config);
-BOOL GetDefaultGPIOConfigbyName(const rom char* name, IOPinId* config);
+typedef struct{
+    char            name[IO_PIN_NAME_MAX_LEN];  //unique identifier of GPIO
+    IOPinConfig     config;
+}IOPinDescription;
+
+BOOL SetGPIOConfig(const rom char* name, IOPinConfig* config);
+BOOL GetGPIOConfig(const rom char* name, IOPinConfig* config);
+BOOL CompareGPIOConfig(IOPinConfig* config1, IOPinConfig* config2);
 BOOL SetGPIO(const rom char* name);
 BOOL ResetGPIO(const rom char* name);
 BOOL ToggleGPIO(const rom char* name);
 BOOL GetGPIO(const rom char* name, BYTE* value);
 BOOL GetAllGPIO(BYTE* J5A, BYTE* J5B, BYTE* J6A, BYTE* J6B);
 
-extern rom const IOPinId DefaultGPIOsConfig[];
+extern rom const IOPinDescription DefaultGPIOsDescription[];
 extern const BYTE ngpios;
 //-----------------------------------------------------------------------
 // 16-bit Timer1 runs at 32,768 Hz and is preloaded with 0x8000 in order to 
@@ -266,11 +270,7 @@ BYTE TeCmdDispatchExt(void);
 BYTE I2C2CmdDispatchExt(void);
 BYTE TeProcessAck(void);
 BYTE TE_CmdParseExt(void);
-/* TODO: remove
-BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
-    CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr);
-ExternalAppSupportFcts* GetExternalAppSupportFcts(void);
-BYTE CmdExt_OpenLoopStepResp(void);*/
+
 void OpenLoopTune1(void);
 void OpenLoopTune2(void);
 void SoftStop(BYTE mtr);
@@ -583,6 +583,32 @@ void Greeting(void);
 
 //Command line extension definitions
 #define CustomCmdIdOffset   0x20    //identifier of the first custom command, "G 'X'"
+
+extern void (*AckCallback)(void);  //pointer to ack callback
+
+typedef enum{
+    config,
+    set,
+    reset,
+    toggle1,
+    toggle2,
+    get,
+    getOneAtATime1,
+    getOneAtATime2,
+    idle
+}GPIOTestSM;
+
+typedef enum{
+    out,
+    outPullup,
+    outInverted,
+    outPullupInverted,
+    in,
+    inPullup,
+    inInverted,
+    inPullupInverted,
+    end
+}GPIOConfigSM;
 
 ////////////////////////////////////////////////////
 //          Other variables declarations          //

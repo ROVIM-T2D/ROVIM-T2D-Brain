@@ -21,13 +21,17 @@
 *******************************************************************************
 ******************************************************************************/
 
-#include "dalf.h"
-
 #ifndef __TEST_H
 #define __TEST_H
+
+#include "dalf.h"
 
 //prototypes
 void TEST_TestInit(void);
 void TEST_InDevelopmentTesting(void);
+
+void TEST_StartGPIODriverTest(void);
+void TEST_GPIODriverOperations(void);
+BOOL TEST_GPIODriverConfig(void);
 
 #endif /*__TEST_H*/

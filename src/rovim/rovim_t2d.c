@@ -22,38 +22,37 @@
 *******************************************************************************
 ******************************************************************************/
 
-#include    "p18f6722.h"
+#include "p18f6722.h"
 #include "rovim.h"
 #include "dalf.h"
 #include <stdio.h>
 #include <string.h>
 
-
-#pragma romdata defaultgpiosconfig
+#pragma romdata DefaultGPIOsDescription
 //there was no space in this file's standard initialized data section for this structure, so I had
 //to move it to program data.
-rom const IOPinId DefaultGPIOsConfig[]={
-    /*name,                exp, number,   dir,   pullup, inverted*/
-    { "brake",              J5,    1,      OUT,    OFF,   OFF }, //controls progressive braking on SigmaDrive, when on auto mode
-    { "unused",             J5,    2,      INOUT,  OFF,   OFF },
-    { "accelerate",         J5,    3,      OUT,    OFF,   OFF }, //controls accelerator on SigmaDrive, when on auto mode
-    { "unused",             J5,    4,      INOUT,  OFF,   OFF },
-    { "activate traction",  J5,    5,      OUT,    OFF,   ON  }, //activates SigmaDrive safety switch, when on auto mode (active low)
-    { "error traction",     J5,    6,      IN,     OFF,   OFF }, //detects error on SigmaDrive controller
-    { "unlock brake",       J5,    7,      OUT,    OFF,   OFF }, //fully unlocks rear-wheel brake
-    { "emergency switch",   J5,    8,      IN,     OFF,   OFF }, //detects when emergency switch is pressed
-    { "reverse",            J5,    9,      OUT,    OFF,   OFF }, //engages reverse on SigmaDrive, when on auto mode
-    { "dead man trigger",   J5,    10,     IN,     OFF,   ON  }, //detects activation of dead man trigger (active low)
-    { "forward",            J5,    11,     OUT,    OFF,   OFF }, //engages forward on SigmaDrive, when on auto mode
-    { "error direction",    J5,    12,     IN,     OFF,   OFF }, //detects when direction position is out-of-bounds
-    { "lock brake",         J5,    13,     OUT,    OFF,   OFF }, //fully locks rear-wheel brake
-    { "unused",             J5,    14,     INOUT,  OFF,   OFF },
-    { "unused",             J5,    15,     INOUT,  OFF,   OFF },
-    { "auto mode",          J5,    16,     IN,     OFF,   OFF }  //detects when auto mode switch is turned on
+rom const IOPinDescription DefaultGPIOsDescription[]={
+    /*name,                 exp, number,   dir,   pullup, inverted*/
+    { "brake",             { J5,    1,      OUT,    OFF,   OFF }}, //controls progressive braking on SigmaDrive, when on auto mode
+    { "",                  { J5,    2,      OUT,    OFF,   OFF }}, //unused
+    { "accelerate",        { J5,    3,      OUT,    OFF,   OFF }}, //controls accelerator on SigmaDrive, when on auto mode
+    { "",                  { J5,    4,      OUT,    OFF,   OFF }}, //unused
+    { "activate traction", { J5,    5,      OUT,    OFF,   ON  }}, //activates SigmaDrive safety switch, when on auto mode (active low)
+    { "error traction",    { J5,    6,      IN,     OFF,   OFF }}, //detects error on SigmaDrive controller
+    { "unlock brake",      { J5,    7,      OUT,    OFF,   OFF }}, //fully unlocks rear-wheel brake
+    { "emergency switch",  { J5,    8,      IN,     OFF,   OFF }}, //detects when emergency switch is pressed
+    { "reverse",           { J5,    9,      OUT,    OFF,   OFF }}, //engages reverse on SigmaDrive, when on auto mode
+    { "dead man trigger",  { J5,    10,     IN,     OFF,   ON  }}, //detects activation of dead man trigger (active low)
+    { "forward",           { J5,    11,     OUT,    OFF,   OFF }}, //engages forward on SigmaDrive, when on auto mode
+    { "error direction",   { J5,    12,     IN,     OFF,   OFF }}, //detects when direction position is out-of-bounds
+    { "lock brake",        { J5,    13,     OUT,    OFF,   OFF }}, //fully locks rear-wheel brake
+    { "",                  { J5,    14,     OUT,    OFF,   OFF }}, //unused
+    { "",                  { J5,    15,     OUT,    OFF,   OFF }}, //unused
+    { "auto mode",         { J5,    16,     IN,     OFF,   OFF }}  //detects when auto mode switch is turned on
 };
 
-const BYTE ngpios= (BYTE) (sizeof(DefaultGPIOsConfig)/sizeof(DefaultGPIOsConfig[0]));
-#pragma romdata
+const BYTE ngpios= (BYTE) (sizeof(DefaultGPIOsDescription)/sizeof(DefaultGPIOsDescription[0]));
+#pragma romdata //resume rom data allocation on the standard section
 
 //configure basic ROVIM features needed early on. To be called as soon as possible
 void ROVIM_T2D_Init(void)
@@ -62,6 +61,7 @@ void ROVIM_T2D_Init(void)
     ioexpcount=-1; //disable IO exp sampling for now
     SetVerbosity (INIT_VERBOSITY_LEVEL);
     ROVIM_T2D_ConfigGPIOs();
+    DEBUG_MSG("ROVIM T2D initialization completed \r\n");
     return;
 }
 
@@ -74,23 +74,27 @@ void ROVIM_T2D_Start(void)
 void ROVIM_T2D_ConfigGPIOs(void)
 {
     BYTE i=0;
-    IOPinId config={0};
-    
+    IOPinConfig config={0};
+
     for (i=0; i<ngpios; i++) {
         //copy configuration to data ram before calling setup function
-        memcpypgm2ram(&config,&(DefaultGPIOsConfig)[i],sizeof(config));
-        SetGPIOConfig(&config);
+        if(strcmppgm("",DefaultGPIOsDescription[i].name)==0)
+        {
+            DEBUG_MSG("GPIO unused\r\n");
+            continue;
+        }
+        memcpypgm2ram(&config,(const rom void *) &DefaultGPIOsDescription[i].config,sizeof(config));
+        SetGPIOConfig(DefaultGPIOsDescription[i].name,&config);
     }
     
-    STATUS_MSG("GPIOs configuration complete \r\n");
     return;
 }
 
 void ROVIM_T2D_Greeting(void)
 {
-    Greeting();
     if(SCFG == TEcfg) 
     { // If Terminal Emulator Interface
+        Greeting();
         printf("ROVIM T2D Brain\r\n");
         printf("ROVIM T2D Software Ver:%2u.%u\r\n",ROVIM_T2D_SW_MAJOR_ID, ROVIM_T2D_SW_MINOR_ID);   // ROVIM Software ID
         printf("ROVIM T2D Contact(s):\r\n"ROVIM_T2D_CONTACTS"\r\n");                                // ROVIM Contacts
@@ -118,6 +122,7 @@ BYTE ROVIM_T2D_CustomCmdDispatch(void)
 
 void ROVIM_T2D_Lockdown(void)
 {
+    STATUS_MSG("Going to lock down mode\r\n");
     //XXX: Should I disable interrupts during this function? Since, in theory, a motor control
     //command can appear before I lock the access to motors...
     //I could also start by locking acess and then create a special command similar to 'O'
@@ -131,14 +136,18 @@ void ROVIM_T2D_Lockdown(void)
     _LED3_ON;               // Visual error indication due to the brake being locked
     
     LockMotorsAccess();
+    DEBUG_MSG("ROVIM now in lock down mode. Should not be able to move while on this state\r\n");
 }
 
 void ROVIM_T2D_ReleaseFromLockdown(void)
 {
+    STATUS_MSG("Releasing ROVIM from lock down mode\r\n");
+    
     ROVIM_T2D_UnlockBrake();
     UnlockMotorsAccess();
     _LED3_OFF;
     
+    DEBUG_MSG("ROVIM is now ready to move\r\n");
 }
 
 BOOL ROVIM_T2D_LockBrake(void)
@@ -146,8 +155,7 @@ BOOL ROVIM_T2D_LockBrake(void)
     TIME now;
     TIME then;
 
-    STATUS_MSG("Braking now\r\n");
-    
+    DEBUG_MSG("Braking now\r\n");
     SetGPIO("lock brake");
     ResetGPIO("unlock brake");
     //Despite having a hw timer, we still need a sw timer, to make sure we don't start debraking
@@ -161,9 +169,8 @@ BOOL ROVIM_T2D_UnlockBrake(void)
 {
     TIME now;
     TIME then;
-
-    STATUS_MSG("Unlocking brake now\r\n");
     
+    DEBUG_MSG("Releasing brake now\r\n");
     ResetGPIO("lock brake");
     SetGPIO("unlock brake");
     //XXX: Set a timer to reset the unlock brake GPIO.

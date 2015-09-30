@@ -3008,7 +3008,8 @@ void main (void)
     //continuously monitor the changes we're doing, to avoid bigger troubles in the
     //future
 #ifdef DALF_TEST_ENABLED
-    TEST_InDevelopmentTesting();
+    //TEST_InDevelopmentTesting();
+    TEST_StartGPIODriverTest();
 #endif
     
 

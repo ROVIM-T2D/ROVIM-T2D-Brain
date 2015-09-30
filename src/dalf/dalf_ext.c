@@ -29,9 +29,11 @@
 #include "rovim.h"
 #include <string.h>
 
-//TODO: remove
-//ExternalAppSupportFcts    ExternalFcts = {0};     //by default there is no external app
+static BOOL GetGPIOIdbyName(const rom char* name, IOPinConfig* config);
+
 static BYTE verbosity = VERBOSITY_DISABLED;     //controls the verbosity of the debug information
+
+void (*AckCallback)(void) = NULL;
 
 WORD OL2Limit = 0;
 WORD OL1Limit = 0;
@@ -48,8 +50,7 @@ void DEBUG_PrintCmd(void)
     if ((!(verbosity & VERBOSITY_LEVEL_DEBUG)) || (SCFG != TEcfg))
         return;
 
-    if (CMD == 0xA) return;
-    DEBUG_MSG("Cmd received: %c. # arguments: %d. Arguments: ", CMD, ARGN);
+    DEBUG_MSG("Cmd received: %c,(%d in decimal). # arguments: %d. Arguments: ", CMD, CMD, ARGN);
     for(i=0;i<ARGN;i++)
     {
         printf("%02X, ",ARG[i]);
@@ -166,15 +167,14 @@ BYTE TeCmdDispatchExt(void)
                 this is to be used if we want other custom functions
                 other than ROVIM_T2D ones. They must be inserted here, 
                 to be parsed before calling the ROVIM dispatch*/
-                default:
+                case 'A':
+                    return TeProcessAck();
                     break;
+                default:
+                    return eParseErr;
             }
             return ROVIM_T2D_CustomCmdDispatch();
             break;
-        /* XXX: this is an advanced feature. For now is unused
-        case 0xA:
-            return TeProcessAck();
-            break;*/
         default:
             return TeCmdDispatch();
             break;
@@ -188,24 +188,6 @@ BYTE TeCmdDispatchExt(void)
 BYTE TE_CmdParseExt(void)
 {
     return TE_CmdParse();
-    
-    /*XXX: this is an advanced feature. For now is unused
-    BYTE err;
-    //since, if the command is wrong, the CMD varible won't be updated, we have
-    //to work around it. It isn't pretty, but the only option is to delve into
-    //the asssembly. And we all know that is going to work out...
-    CMD = 0xA;
-
-    err = TE_CmdParse();
-
-    if (CMD == 0xA)
-    {
-        return NoErr;
-    }
-    else
-    {
-        return err;
-    }*/
 }
 
 BYTE I2C2CmdDispatchExt(void)
@@ -213,11 +195,20 @@ BYTE I2C2CmdDispatchExt(void)
     return I2C2CmdDispatch();
 }
 
-/*XXX: this is an advanced feature. For now is unused
 BYTE TeProcessAck(void)
 {
-    return eDisable;
-}*/
+    if(ARGN != 1)
+    {
+        return eParseErr;
+    }
+
+    if(AckCallback != NULL)
+    {
+        AckCallback();
+    }
+    //call registered functions to process the ack
+    return NoErr;
+}
 
 #ifdef HELP_ENABLED
 // Help submodule ----------------------------------------------------------------------------------
@@ -243,72 +234,142 @@ void UnlockMotorsAccess(void)
     return;
 }
 
-// GPIO sub-driver ---------------------------------------------------------------------------------
 
-BOOL SetGPIOConfig(IOPinId* config)
+// GPIO sub-driver ---------------------------------------------------------------------------------
+/*Remark: Due to the nature of this application, where all possible GPIOs are known beforehand, 
+(since they need to be physically connected) this driver works with a constant set of possible 
+GPIOs, while allowing to change each one's configuration. Each GPIO has a default configuration,
+that is the mos likely to be use during program operation.*/
+
+//Set a config for an existing GPIO
+BOOL SetGPIOConfig(const rom char* name, IOPinConfig* config)
 {
-    BYTE pre_dir=0, pre_pullup=0, pre_inverted=0, aux=0, post_dir=0, post_pullup=0, post_inverted=0;
+    BYTE aux=0, i=0;
+    BYTE dir=0;
+    BYTE pullup=0;
+    BYTE inverted=0;
+    //These variables depecting the previous state exist to provide debug information
+    BYTE previousDir=0;
+    BYTE previousPullup=0;
+    BYTE previousInverted=0;
+    IOPinConfig defaultConfig={0};
+    //char nameinRam[IO_PIN_NAME_MAX_LEN];
     
     //parameter check
-    if(config == NULL){
+    if(config == NULL)
+    {
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if((config->number > GPIOS_PER_EXPANDER) || (config->number==0))
+    {
+        ERROR_MSG("GPIO description parameters invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if(name == NULL)
+    {
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
+        return FALSE;
+    }
+    for(i=0;i<IO_PIN_NAME_MAX_LEN;i++)
+    {
+        if(name[i] == '\0') break;
+    }
+    if((i==0) || (i==IO_PIN_NAME_MAX_LEN))
+    {
+        ERROR_MSG("GPIO name invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    //Verify the GPIO exists and is coherent with default params
+    if(!GetGPIOIdbyName(name, &defaultConfig))
+    {
+        ERROR_MSG("GPIO does not exist. Aborting operation.\r\n");
+        return FALSE;
+    }
+    //XXX:this should be part of the GPIO id. The config should only the 3 non-constant parameters
+    if((defaultConfig.number != config->number) || (defaultConfig.exp != config->exp))
+    {
+        ERROR_MSG("GPIO description does not match a valid GPIO's. Aborting operation.\r\n");
         return FALSE;
     }
     
     //Get current IOEXP bank config
     if(config->exp == J5){
-        pre_dir=ReadIOExp2(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
-        pre_inverted=ReadIOExp2(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
-        pre_pullup=ReadIOExp2(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
+        previousDir=ReadIOExp2(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
+        previousInverted=ReadIOExp2(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
+        previousPullup=ReadIOExp2(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
     }
     else{
-        pre_dir=ReadIOExp1(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
-        pre_inverted=ReadIOExp1(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
-        pre_pullup=ReadIOExp1(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
+        previousDir=ReadIOExp1(IODIRA + IOEXP_REG_BANK_OFFSET(config->number));
+        previousInverted=ReadIOExp1(IPOLA + IOEXP_REG_BANK_OFFSET(config->number));
+        previousPullup=ReadIOExp1(GPPUA + IOEXP_REG_BANK_OFFSET(config->number));
     }
     
     //Change the configuration of only the GPIO under treatment
+    /* For further info on these calculations see:
+    http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
+    CHANGE Nth BIT TO X: number ^= (-x ^ number) & (1 << n);*/
     aux= config->inverted==ON? 0xFF:0;
-    post_inverted = pre_inverted ^( (aux ^ pre_inverted) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
+    inverted = previousInverted ^( (aux ^ previousInverted) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
     aux= config->pullup==ON? 0xFF:0;
-    post_pullup = pre_pullup ^( (aux ^ pre_pullup) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
+    pullup = previousPullup ^( (aux ^ previousPullup) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
     aux= config->dir==IN? 0xFF:0;
-    post_dir = pre_dir ^( (aux ^ pre_dir) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
+    dir = previousDir ^( (aux ^ previousDir) & (1U << IOEXP_PIN_BIT_OFFSET(config->number)) );
     
     //Write the new configuration
     if(config->exp == J5){
-        WriteIOExp2(IODIRA + IOEXP_REG_BANK_OFFSET(config->number), post_dir);
-        WriteIOExp2(IPOLA + IOEXP_REG_BANK_OFFSET(config->number), post_inverted);
-        WriteIOExp2(GPPUA + IOEXP_REG_BANK_OFFSET(config->number), post_pullup);
+        WriteIOExp2(IODIRA + IOEXP_REG_BANK_OFFSET(config->number), dir);
+        WriteIOExp2(IPOLA + IOEXP_REG_BANK_OFFSET(config->number), inverted);
+        WriteIOExp2(GPPUA + IOEXP_REG_BANK_OFFSET(config->number), pullup);
     }
     else{
-        WriteIOExp1(IODIRA + IOEXP_REG_BANK_OFFSET(config->number), post_dir);
-        WriteIOExp1(IPOLA + IOEXP_REG_BANK_OFFSET(config->number), post_inverted);
-        WriteIOExp1(GPPUA + IOEXP_REG_BANK_OFFSET(config->number), post_pullup);
+        WriteIOExp1(IODIRA + IOEXP_REG_BANK_OFFSET(config->number), dir);
+        WriteIOExp1(IPOLA + IOEXP_REG_BANK_OFFSET(config->number), inverted);
+        WriteIOExp1(GPPUA + IOEXP_REG_BANK_OFFSET(config->number), pullup);
     }
     
+    DEBUG_MSG("SetGPIOConfig: pin=%d, bank=%c, bank bit=%d. Previous: dir=%08b, \
+inv=%08b, pull=%08b. Desired: dir=%01b, inv=%01b, pull=%01b. Current: dir=%08b, inv=%08b, pull=%08b\r\n", \
+config->number, ('A'+IOEXP_REG_BANK_OFFSET(config->number)),\
+(IOEXP_PIN_BIT_OFFSET(config->number)+1), previousDir, previousInverted, previousPullup, \
+(config->dir==IN? 1:0), (config->inverted==ON? 1:0),(config->pullup==ON? 1:0), dir, inverted, pullup);
+
+    /* Uncomment this section if you want to check intermediate calculations
     DEBUG_MSG("SetGPIOConfig: pin=%d, bank offset=%d, bit offset=%d. Previous: dir=%08b, inv=%08b, pull=%08b\
-. Intermediate calculations (for dir only): aux=%08b, aux^pre_dir=%08b, 1U<<offset=%08b, (aux^pre_dir) & (1U<<offset)\
+. Intermediate calculations (for dir only): aux=%08b, aux^previousDir=%08b, 1U<<offset=%08b, (aux^previousDir) & (1U<<offset)\
 =%08b. Current: dir=%08b, inv=%08b, pull=%08b\r\n", config->number, IOEXP_REG_BANK_OFFSET(config->number),\
-IOEXP_PIN_BIT_OFFSET(config->number), pre_dir, pre_inverted, pre_pullup, aux, (aux ^ pre_dir),\
+IOEXP_PIN_BIT_OFFSET(config->number), previousDir, previousInverted, previousPullup, aux, (aux ^ previousDir),\
  (1U << IOEXP_PIN_BIT_OFFSET(config->number)), \
- ((aux ^ pre_dir) & (1U << IOEXP_PIN_BIT_OFFSET(config->number))), post_dir, post_inverted, \
- post_pullup);
+ ((aux ^ previousDir) & (1U << IOEXP_PIN_BIT_OFFSET(config->number))), dir, inverted, \
+ pullup);*/
+ 
     return TRUE;
 }
 
 //both parameters must point to valid variables. Space won't be allocated here
-BOOL GetGPIOConfig(const rom char* name, IOPinId* config)
+BOOL GetGPIOConfig(const rom char* name, IOPinConfig* config)
 {
-    BYTE dir=0, pullup=0, inverted=0, aux=0;
+    BYTE dir=0, pullup=0, inverted=0, aux=0, i=0;
     
     if(config == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
     if(name == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
-    
-    if(!GetDefaultGPIOConfigbyName(name, config)){
+    for(i=0;i<IO_PIN_NAME_MAX_LEN;i++)
+    {
+        if(name[i] == '\0') break;
+    }
+    if((i==0) || (i==IO_PIN_NAME_MAX_LEN))
+    {
+        ERROR_MSG("GPIO name invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if(!GetGPIOIdbyName(name, config)){
+        ERROR_MSG("GPIO does not exist. Aborting operation.\r\n");
         config=NULL;
         return FALSE;
     }
@@ -326,6 +387,9 @@ BOOL GetGPIOConfig(const rom char* name, IOPinId* config)
     }
     
     //get and translate the configuration for the GPIO under treatment
+    /* For further info on these calculations see:
+    http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
+    CHECK: bit = (number >> x) & 1;*/
     aux= (dir >> IOEXP_PIN_BIT_OFFSET(config->number)) & 1U;
     config->dir= aux? IN: OUT;
     aux= (inverted >> IOEXP_PIN_BIT_OFFSET(config->number)) & 1U;
@@ -333,167 +397,261 @@ BOOL GetGPIOConfig(const rom char* name, IOPinId* config)
     aux= (pullup >> IOEXP_PIN_BIT_OFFSET(config->number)) & 1U;
     config->pullup= aux? ON: OFF;
     
-    DEBUG_MSG("GetGPIOConfig: pin=%d, bank offset=%d, bit offset=%d. dir=%08b,%d, inv=%08b,%d, pull=%08b,\
-%d.\r\n", config->number, IOEXP_REG_BANK_OFFSET(config->number), IOEXP_PIN_BIT_OFFSET(config->number), \
-dir, config->dir, inverted, config->inverted, pullup, config->pullup );
+    DEBUG_MSG("GetGPIOConfig: pin=%d, bank=%c, bank bit=%d. dir=%08b,%d, inv=%08b,%d, pull=%08b,\
+%d.\r\n", config->number, ('A'+IOEXP_REG_BANK_OFFSET(config->number)),\
+    (IOEXP_PIN_BIT_OFFSET(config->number)+1), dir, config->dir, inverted, config->inverted,\
+    pullup, config->pullup);
+    return TRUE;
+}
+
+BOOL CompareGPIOConfig(IOPinConfig* config1, IOPinConfig* config2)
+{
+    if(config1 == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if(config2 == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if((config1->number > GPIOS_PER_EXPANDER) || (config1->number==0))
+    {
+        ERROR_MSG("GPIO config parameters invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if((config2->number > GPIOS_PER_EXPANDER) || (config2->number==0))
+    {
+        ERROR_MSG("GPIO config parameters invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    
+    if( !memcmp( (const void *)config1, (const void *)config2, sizeof(IOPinConfig)))
+    {
+        return FALSE;
+    }
+    
     return TRUE;
 }
 
 //String constants are automatically stored in rom. See MPLAB C-18 Users guide, 2.73.
-//So, the first argument is in fact rom qualified.
-//However, there is no strncmppgm2pgm - outstanding!
-BOOL GetDefaultGPIOConfigbyName(const rom char* name, IOPinId* config)
+/*this function searches the list of Registered GPIO names (set during initialization) for a
+match to the name provided. If it is found, it returns the GPIO's corresponding configuration,
+If not, an error occurs.*/
+//This is an sub-driver private function. Parameter check is done before calling it.
+static BOOL GetGPIOIdbyName(const rom char* name, IOPinConfig* config)
 {
     BYTE i=0;
-    char aux[IO_PIN_NAME_MAX_LEN]={0};
+    char nameInRam[IO_PIN_NAME_MAX_LEN]={0};
     
     if(config == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
     if(name == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
-   
+
+    /*cannot print config->name because printf like functions:
+    "expect the format string to be stored in program memory"*/
+    strncpypgm2ram(nameInRam,name,IO_PIN_NAME_MAX_LEN);
+    
     for(i=0; i<ngpios; i++){
-        //copy the first argument to ram, to be able to use it on strncmppgm2ram
-        strncpypgm2ram(aux, name, IO_PIN_NAME_MAX_LEN);
-        if(strncmppgm2ram(aux, DefaultGPIOsConfig[i].name, IO_PIN_NAME_MAX_LEN) == 0){
-            memcpypgm2ram(config,&(DefaultGPIOsConfig)[i],sizeof(*config));
-            //cannot print config->name because printf like functions 
-            //"expect the format string to be stored in program memory"
-            DEBUG_MSG("GetDefaultGPIOConfigbyName: matching name found:%s\r\n", aux);
+        //Do NOT use strncmppgm, since it requires the 3rd argument to be in rom and fails silently if it isn't correctly provided!
+        if(strcmppgm(name, DefaultGPIOsDescription[i].name) == 0){
+            memcpypgm2ram(config,(const rom void *) &DefaultGPIOsDescription[i].config,sizeof(*config));
+            DEBUG_MSG("GetGPIOIdbyName: matching name found for '%s'.\r\n", nameInRam);
             return TRUE;
         }
     }
 
-    ERROR_MSG("GetDefaultGPIOConfigbyName could not find a matching GPIO\r\n");
+    ERROR_MSG("GetGPIOIdbyName could not find a matching name for '%s'.\r\n",nameInRam);
     config=NULL;
     return FALSE;
 }
 
+//XXX: Should not be able to set, reset and toggle a GPIO configured as input,
+//yet, I may want to get the value os a GPIO configured as output.
+//XXX:Rule of thumb: Always read inputs from PORTx and write outputs to LATx. If you need to read what you set an output to, read LATx.
 BOOL SetGPIO(const rom char* name)
 {
-    BYTE pre_value=0, post_value;
-    IOPinId config;
+    BYTE i=0;
+    BYTE previousValue=0, value;
+    IOPinConfig config;
 
     if(name == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
-
-    if(!GetDefaultGPIOConfigbyName(name, &config)){
+    for(i=0;i<IO_PIN_NAME_MAX_LEN;i++)
+    {
+        if(name[i] == '\0') break;
+    }
+    if((i==0) || (i==IO_PIN_NAME_MAX_LEN))
+    {
+        ERROR_MSG("GPIO name invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if(!GetGPIOIdbyName(name, &config)){
+        ERROR_MSG("GPIO does not exist. Aborting operation.\r\n");
         return FALSE;
     }
     
     //Get current IOEXP bank gpios
     if(config.exp == J5){
-        pre_value=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+        previousValue=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
     }
     else{
-        pre_value=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+        previousValue=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
     }
     
     //Change the configuration of only the GPIO under treatment
-    post_value = pre_value | (1U << IOEXP_PIN_BIT_OFFSET(config.number));
+    /* For further info on these calculations see:
+    http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
+    SET: number |= 1 << x;*/
+    value = previousValue | (1U << IOEXP_PIN_BIT_OFFSET(config.number));
     
     //Write the new value
     if(config.exp == J5){
-        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
     else{
-        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
-    
-    DEBUG_MSG("SetGPIO: pin=%d, previous GPIO bank %c  value=%08b, new value=%08b\r\n",\
-    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), pre_value, post_value);
+    DEBUG_MSG("SetGPIO: pin=%d, bank %c, bank bit=%d. Previous value=%08b, current \
+value=%08b\r\n", config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
 
 BOOL ResetGPIO(const rom char* name)
 {
-    BYTE pre_value=0, post_value=0;
-    IOPinId config;
+    BYTE i=0;
+    BYTE previousValue=0, value=0;
+    IOPinConfig config;
 
     if(name == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
-
-    if(!GetDefaultGPIOConfigbyName(name, &config)){
+    for(i=0;i<IO_PIN_NAME_MAX_LEN;i++)
+    {
+        if(name[i] == '\0') break;
+    }
+    if((i==0) || (i==IO_PIN_NAME_MAX_LEN))
+    {
+        ERROR_MSG("GPIO name invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if(!GetGPIOIdbyName(name, &config)){
+        ERROR_MSG("GPIO does not exist. Aborting operation.\r\n");
         return FALSE;
     }
     
     //Get current IOEXP bank gpios
     if(config.exp == J5){
-        pre_value=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+        previousValue=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
     }
     else{
-        pre_value=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+        previousValue=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
     }
     
     //Change the configuration of only the GPIO under treatment
-    post_value = pre_value & (~(1U << IOEXP_PIN_BIT_OFFSET(config.number)));
+    /* For further info on these calculations see:
+    http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
+    RESET: number &= ~(1 << x);*/
+    value = previousValue & (~(1U << IOEXP_PIN_BIT_OFFSET(config.number)));
     
     //Write the new value
     if(config.exp == J5){
-        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
     else{
-        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
 
-    DEBUG_MSG("ResetGPIO: pin=%d, previous GPIO bank %c value=%08b, new value=%08b\r\n",\
-    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), pre_value, post_value);
+    DEBUG_MSG("ResetGPIO: pin=%d, bank %c, bank bit=%d. Previous value=%08b, current \
+value=%08b\r\n", config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
 
 BOOL ToggleGPIO(const rom char* name)
 {
-    BYTE pre_value=0, post_value=0;
-    IOPinId config;
+    BYTE i=0;
+    BYTE previousValue=0, value=0;
+    IOPinConfig config;
 
     if(name == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
-
-    if(!GetDefaultGPIOConfigbyName(name, &config)){
+    for(i=0;i<IO_PIN_NAME_MAX_LEN;i++)
+    {
+        if(name[i] == '\0') break;
+    }
+    if((i==0) || (i==IO_PIN_NAME_MAX_LEN))
+    {
+        ERROR_MSG("GPIO name invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if(!GetGPIOIdbyName(name, &config)){
+        ERROR_MSG("GPIO does not exist. Aborting operation.\r\n");
         return FALSE;
     }
     
     //Get current IOEXP bank gpios
     if(config.exp == J5){
-        pre_value=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+        previousValue=ReadIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
     }
     else{
-        pre_value=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
+        previousValue=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
     }
     
-    post_value = pre_value ^ (1U << IOEXP_PIN_BIT_OFFSET(config.number));
+    /* For further info on these calculations see:
+    http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
+    TOGGLE: number ^= 1 << x;*/
+    value = previousValue ^ (1U << IOEXP_PIN_BIT_OFFSET(config.number));
     
     //Write the new value
     if(config.exp == J5){
-        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+        WriteIOExp2(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
     else{
-        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), post_value);
+        WriteIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
 
-    DEBUG_MSG("ToggleGPIO: pin=%d, previous GPIO bank %c value=%08b, new value=%08b\r\n", \
-    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), pre_value, post_value);
+    DEBUG_MSG("ToggleGPIO: pin=%d, bank %c, bank bit=%d. Previous value=%08b, current \
+value=%08b\r\n", config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
 
 BOOL GetGPIO(const rom char* name, BYTE* value)
 {
-    IOPinId config;
+    BYTE i=0;
+    IOPinConfig config;
     BYTE aux=0;
     
     if(name == NULL){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
+        return FALSE;
+    }
+    for(i=0;i<IO_PIN_NAME_MAX_LEN;i++)
+    {
+        if(name[i] == '\0') break;
+    }
+    if((i==0) || (i==IO_PIN_NAME_MAX_LEN))
+    {
+        ERROR_MSG("GPIO name invalid. Aborting operation.\r\n");
+        return FALSE;
+    }
+    if(!GetGPIOIdbyName(name, &config)){
+        ERROR_MSG("GPIO does not exist. Aborting operation.\r\n");
         return FALSE;
     }
     if(value == NULL){
-        return FALSE;
-    }
-    
-    if(!GetDefaultGPIOConfigbyName(name, &config)){
+        ERROR_MSG("Received NULL input parameter. Aborting operation.\r\n");
         return FALSE;
     }
     
@@ -504,10 +662,14 @@ BOOL GetGPIO(const rom char* name, BYTE* value)
         aux=ReadIOExp1(GPIOA + IOEXP_REG_BANK_OFFSET(config.number));
     }
     
+    /* For further info on these calculations see:
+    http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
+    CHECK: bit = (number >> x) & 1;*/
     *value= (aux>> IOEXP_PIN_BIT_OFFSET(config.number)) & 1U;
 
-    DEBUG_MSG("GetGPIO: pin=%d, GPIO bank %c value=%08b,%d\r\n", \
-    config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)), aux, *value);
+    DEBUG_MSG("GetGPIO: pin=%d, bank %c, bank bit=%d. Value=%d\r\n", config.number, \
+    ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    (IOEXP_PIN_BIT_OFFSET(config.number) +1), *value);
     return TRUE;
 }
 
