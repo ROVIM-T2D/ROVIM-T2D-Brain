@@ -32,6 +32,6 @@ void TEST_InDevelopmentTesting(void);
 
 void TEST_StartGPIODriverTest(void);
 void TEST_GPIODriverOperations(void);
-BOOL TEST_GPIODriverConfig(void);
+GPIOTestSM TEST_GPIODriverConfig(void);
 
 #endif /*__TEST_H*/

@@ -3009,7 +3009,7 @@ void main (void)
     //future
 #ifdef DALF_TEST_ENABLED
     //TEST_InDevelopmentTesting();
-    TEST_StartGPIODriverTest();
+    //TEST_StartGPIODriverTest();
 #endif
     
 

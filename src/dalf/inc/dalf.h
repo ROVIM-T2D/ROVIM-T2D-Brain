@@ -144,8 +144,8 @@ BOOL ToggleGPIO(const rom char* name);
 BOOL GetGPIO(const rom char* name, BYTE* value);
 BOOL GetAllGPIO(BYTE* J5A, BYTE* J5B, BYTE* J6A, BYTE* J6B);
 
-extern rom const IOPinDescription DefaultGPIOsDescription[];
-extern const BYTE ngpios;
+extern rom const IOPinDescription* GPIOsDescription;
+extern BYTE ngpios;
 //-----------------------------------------------------------------------
 // 16-bit Timer1 runs at 32,768 Hz and is preloaded with 0x8000 in order to 
 // generate periodic 1-sec interrupts.  This timer also supports timeout
@@ -638,6 +638,7 @@ extern  BYTE    CmdSource;
 #define VERBOSITY_LEVEL_WARNING         0x02
 #define VERBOSITY_LEVEL_STATUS          0x04
 #define VERBOSITY_LEVEL_DEBUG           0x08
+#define VERBOSITY_LEVEL_MSG             0x0F
 
 #define VERBOSITY_USE_CALL_INFO         0x40
 #define VERBOSITY_USE_TIMESTAMP         0x80
@@ -649,10 +650,11 @@ extern  BYTE    CmdSource;
     PRINT_VERBOSITY_MSG("FATAL ERROR!!:\t",VERBOSITY_LEVEL_ERROR,ARGS); \
     SetVerbosity(auxVerbosity); \
 } while(0)
-#define ERROR_MSG(ARGS)             PRINT_VERBOSITY_MSG("ERROR!:\t",VERBOSITY_LEVEL_ERROR,ARGS)
+#define ERROR_MSG(ARGS)             PRINT_VERBOSITY_MSG("ERROR!: \t",VERBOSITY_LEVEL_ERROR,ARGS)
 #define WARNING_MSG(ARGS)           PRINT_VERBOSITY_MSG("WARNING:\t",VERBOSITY_LEVEL_WARNING,ARGS)
-#define STATUS_MSG(ARGS)            PRINT_VERBOSITY_MSG("STATUS:\t",VERBOSITY_LEVEL_STATUS,ARGS)
-#define DEBUG_MSG(ARGS)             PRINT_VERBOSITY_MSG("DEBUG:\t",VERBOSITY_LEVEL_DEBUG,ARGS)
+#define STATUS_MSG(ARGS)            PRINT_VERBOSITY_MSG("STATUS: \t",VERBOSITY_LEVEL_STATUS,ARGS)
+#define DEBUG_MSG(ARGS)             PRINT_VERBOSITY_MSG("DEBUG:  \t",VERBOSITY_LEVEL_DEBUG,ARGS)
+#define MSG(ARGS)                   PRINT_VERBOSITY_MSG("",VERBOSITY_LEVEL_MSG,ARGS)
 
 /*Remember that the __LINE__ macro says it is one line above the actual line on the .c, because of
 the 1st line workaround; so we fix it here*/
