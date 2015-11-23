@@ -86,6 +86,7 @@
 /* Function Prototypes */
 void    ISRHI ( void );
 void    ISRLO ( void );
+void    INT1_ISR_SINGLE (void);
 //void  Greeting(void);             // Terminal emulator greeting
 
     // Command Handling
@@ -256,7 +257,7 @@ extern  WORD    npid1;                      // Motor1 PID Tuning Output count
 extern  BYTE    Mtr1_Flags1;                // Motor1 flags1
 //extern    BYTE    Mtr1_Flags2;                // See dalf.h
 extern  BYTE    S1,Power1;                  // SPD: [0..100%], [0..VMAX1%]
-//extern    short long  encode1;            // See dalf.h
+extern  short long  encode1;                // Mtr1 position encoder
 extern  short long  V1;                     // Mtr1 Velocity
 extern  short long  x1pos;                  // Motor1 PID Target
 extern  short long  Err1;                   // Motor1 PID Err
@@ -268,7 +269,7 @@ extern  WORD    npid2;                      // Motor2 PID Tuning: Output count.
 extern  BYTE    Mtr2_Flags1;                // Motor2 flags1
 //extern    BYTE    Mtr2_Flags2;            // See dalf.h
 extern  BYTE    S2,Power2;                  // SPD: [0..100%], [0..VMAX2%]
-//extern    short long  encode2;            // See dalf.h
+extern  short long  encode2;                // Mtr2 position encoder
 extern  short long  V2;                     // Mtr2 Velocity
 extern  short long  x2pos;                  // Motor2 PID Targets
 extern  short long  Err2;                   // Motor2 PID Err
@@ -2992,17 +2993,19 @@ void main (void)
 
     ROVIM_T2D_Greeting();
 
-    /* Check if the system is in a good, non-dangerous state before prooceding */
+    /*TODO: delete. This verification will be done inside the ReleaseFromLockdown() function,
+and this action will have to be performed by the user    
+    //Check if the system is in a good, non-dangerous state before prooceding
     
     if ( FALSE != ROVIM_T2D_ValidateInitialState() )
     {
-        /* The vehicle is good to go */
+        // The vehicle is good to go
         ROVIM_T2D_ReleaseFromLockdown();
     }
     else
     {
         //XXX: Should I do something else here? Like wait indefinitely?
-    }
+    }*/
 
     ROVIM_T2D_Start();
     //continuously monitor the changes we're doing, to avoid bigger troubles in the
@@ -3075,7 +3078,7 @@ void ISRHI (void)
     if ( (INTCONbits.INT0IE == 1) && (INTCONbits.INT0IF == 1) ) INT0_ISR();
 
     // If INT1 Interrupt (AB1INT: Mtr1 encoder)
-    if ( (INTCON3bits.INT1IE == 1) && (INTCON3bits.INT1IF == 1) ) INT1_ISR();
+    if ( (INTCON3bits.INT1IE == 1) && (INTCON3bits.INT1IF == 1) ) INT1_ISR_SINGLE();
 
     // If TX1 Interrupt (Cmd Interface Xmit)
     if ( (PIE1bits.TX1IE == 1) && (PIR1bits.TX1IF == 1) ) TX1_ISR();
@@ -3100,5 +3103,21 @@ void ISRHI (void)
 #pragma interruptlow ISRHI
 void ISRLO (void)
 {
+}
+
+// Custom handler for INT1 Interrupt (AB1INT: Mtr1 encoder), for a single-source encoder
+/* This ISR reads a single source encoder signal, and ignore quadrature signals and
+direction calculations.*/
+void INT1_ISR_SINGLE (void)
+{
+    INTCON3bits.INT1IF=0;
+    //XXX: Should I actually read the port value instead of just assuming each interrupt is a pulse?
+    /*Q: Should this not be declared as volatile?
+      A: I think it can work like this, because the variable may not be optimized in it's source
+      object, and will therefore behave implicitly as volatile. But this is just an assumption.
+      Anyhow, I've done some light testing, and it seems qualifying the variable as volatile doesn't
+      change things.
+      */
+    encode1++;
 }
 //----------------------------------------------------------------------------

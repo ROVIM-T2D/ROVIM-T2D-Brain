@@ -743,7 +743,7 @@ void TEST_GPIODriverOperations(void)
                 }
             }
             STATUS_MSG("GPIO Test: Set complete. Please confirm if result is as expected.\
-.\r\nPress 'G 0' <ENTER> to proceed to Reset operation.\r\n");
+.\r\nPress 'G' <ENTER> to proceed to Reset operation.\r\n");
             currentTest=reset;
             break;
             
@@ -756,7 +756,7 @@ void TEST_GPIODriverOperations(void)
                 }
             }
             STATUS_MSG("GPIO Test: Reset complete. Please confirm if result is as expected.\
-.\r\nPress 'G 0' <ENTER> to proceed to 1st Toggle operation.\r\n");
+.\r\nPress 'G' <ENTER> to proceed to 1st Toggle operation.\r\n");
             currentTest=toggle1;
             break;
             
@@ -769,7 +769,7 @@ void TEST_GPIODriverOperations(void)
                 }
             }
             STATUS_MSG("GPIO Test: 1st Toggle complete. Please confirm if result is as expected.\
-.\r\nPress 'G 0' <ENTER> to proceed to 2nd Toggle operation.\r\n");
+.\r\nPress 'G' <ENTER> to proceed to 2nd Toggle operation.\r\n");
             currentTest=toggle2;
             break;
 
@@ -782,7 +782,7 @@ void TEST_GPIODriverOperations(void)
                 }
             }
             STATUS_MSG("GPIO Test: 2nd Toggle complete. Please confirm if result is as expected.\
-.\r\nPress 'G 0' <ENTER> to proceed to Get operation.\r\n");
+.\r\nPress 'G' <ENTER> to proceed to Get operation.\r\n");
             currentTest=get;
             break;
             
@@ -797,7 +797,7 @@ void TEST_GPIODriverOperations(void)
                 STATUS_MSG("GPIO %d on expander J%d=%d.\r\n", i<16? i+1: i-15, (i<16?5:6), value);
             }
             STATUS_MSG("GPIO Test: Get complete. Please confirm if result is as expected.\
-.\r\nPress 'G 0' <ENTER> to proceed to next operation\r\n");
+.\r\nPress 'G' <ENTER> to proceed to next operation\r\n");
             currentTest=config;
             break;
         
@@ -811,7 +811,7 @@ void TEST_GPIODriverOperations(void)
                 }
                 STATUS_MSG("GPIO %d on exp J%d=%d. Confirm it reads as expected.\r\n",
                 j<16? j+1: j-15, (j<16?5:6), value);
-                STATUS_MSG("Now feed pin %d on connector J%d with 5V and Press 'G 0' <ENTER> to read it\r\n",
+                STATUS_MSG("Now feed pin %d on connector J%d with 5V and Press 'G' <ENTER> to read it\r\n",
                 j<15? j+1+1: j-15+1, (j<16?5:6));
                 j++;
                 return;
@@ -824,7 +824,7 @@ void TEST_GPIODriverOperations(void)
             STATUS_MSG("GPIO %d on exp J%d=%d. Confirm it reads as expected.\r\n",
             j<16? j+1: j-15, (j<16?5:6), value);
             STATUS_MSG("GPIO Test: 5V input test complete. Connect now pin 1 on connector J5 to the\
-ground and press 'G 0' <ENTER> to read it\r\n");
+ground and press 'G' <ENTER> to read it\r\n");
             j=0;
             currentTest=getOneAtATime2;
             break;
@@ -840,7 +840,7 @@ ground and press 'G 0' <ENTER> to read it\r\n");
                 }
                 STATUS_MSG("GPIO %d on exp J%d=%d. Confirm it reads as expected\r\n",
                 j<16? j+1: j-15, (j<16?5:6), value);
-                STATUS_MSG("Now feed pin %d on connector J%d to ground and Press 'G 0' <ENTER> to read it\r\n",
+                STATUS_MSG("Now feed pin %d on connector J%d to ground and Press 'G' <ENTER> to read it\r\n",
                 j<15? j+1+1: j-15+1, (j<16?5:6));
                 j++;
                 return;
@@ -853,7 +853,7 @@ ground and press 'G 0' <ENTER> to read it\r\n");
             STATUS_MSG("GPIO %d on exp J%d=%d. Confirm it reads as expected\r\n",
             j<16? j+1: j-15, (j<16?5:6), value);
             STATUS_MSG("GPIO Test: 0V input test complete.\
-\r\nPress 'G 0' <ENTER> to proceed to next configuration test\r\n");
+\r\nPress 'G' <ENTER> to proceed to next configuration test\r\n");
             j=0;
             currentTest=config; //XXX: change when next states are ready
             break;
@@ -910,7 +910,7 @@ each pin's individual voltage after each of the following operations, and confir
 expected:\r\n\>Voltage at present should be 0V;\r\n>5V after 'Set' operation;\
 \r\n>0V after 'Reset' operation;\r\n>5V after 1st 'Toggle' operation;\r\n>0V after 2nd 'Toggle' \
 operation;\r\n>Voltage should not change after the 'Get' operation.\r\n\
-Press 'G 0' <ENTER> when ready to proceed to 'Set' operation.\r\n");
+Press 'G' <ENTER> when ready to proceed to 'Set' operation.\r\n");
             currentConfig=outPullup;
             return set;
             break;
@@ -946,7 +946,7 @@ each pin's individual voltage after each of the following operations, and confir
 expected:\r\n\>Voltage at present should be 0V;\r\n>5V after 'Set' operation;\
 \r\n>0V after 'Reset' operation;\r\n>5V after 1st 'Toggle' operation;\r\n>0V after 2nd 'Toggle' \
 operation;\r\n>Voltage should not change after the 'Get' operation.\r\n\
-Press 'G 0' <ENTER> when ready to proceed to 'Set' operation.\r\n");
+Press 'G' <ENTER> when ready to proceed to 'Set' operation.\r\n");
             currentConfig=outInverted;
             return set;
             break;
@@ -982,7 +982,7 @@ each pin's individual voltage after each of the following operations, and confir
 expected:\r\n\>Voltage at present should be 0V;\r\n>5V after 'Set' operation;\
 \r\n>0V after 'Reset' operation;\r\n>5V after 1st 'Toggle' operation;\r\n>0V after 2nd 'Toggle' \
 operation;\r\n>Voltage should not change after the 'Get' operation.\r\n\
-Press 'G 0' <ENTER> when ready to proceed to 'Set' operation.\r\n");
+Press 'G' <ENTER> when ready to proceed to 'Set' operation.\r\n");
             currentConfig=outPullupInverted;
             return set;
             break;
@@ -1018,7 +1018,7 @@ each pin's individual voltage after each of the following operations, and confir
 expected:\r\n\>Voltage at present should be 0V;\r\n>5V after 'Set' operation;\
 \r\n>0V after 'Reset' operation;\r\n>5V after 1st 'Toggle' operation;\r\n>0V after 2nd 'Toggle' \
 operation;\r\n>Voltage should not change after the 'Get' operation.\r\n\
-Press 'G 0' <ENTER> when ready to proceed to 'Set' operation.\r\n");
+Press 'G' <ENTER> when ready to proceed to 'Set' operation.\r\n");
             currentConfig=in;
             return set;
             break;
@@ -1054,7 +1054,7 @@ each pin's individual voltage. It should be floating.\r\nThen, repeat the follow
 >Feed each pin with 5V and confirm the computer measures it as '1'. \
 Repeat for every pin;\r\n>Connect each pin to ground and confirm the computer measures it as '0'. \
 Repeat for every pin.\r\nAfter the measurements, and while feeding 5V to pin 1 on expander J5, \
-press 'G 0' <ENTER> to proceed to the first operation.\r\n");
+press 'G' <ENTER> to proceed to the first operation.\r\n");
             currentConfig=inPullup;
             return getOneAtATime1;
             break;
@@ -1090,7 +1090,7 @@ each pin's individual voltage. It should be 5V.\r\nThen, repeat the following fo
 >Feed each pin with 5V and confirm the computer measures it as '1'. \
 Repeat for every pin;\r\n>Connect each pin to ground and confirm the computer measures it as '0'. \
 Repeat for every pin.\r\nAfter the measurements, and while feeding 5V to pin 1 on expander J5, \
-press 'G 0' <ENTER> to proceed to the first operation.\r\n");
+press 'G' <ENTER> to proceed to the first operation.\r\n");
             currentConfig=inInverted;
             return getOneAtATime1;
             break;
@@ -1126,7 +1126,7 @@ each pin's individual voltage. It should be floating.\r\nThen, repeat the follow
 >Feed each pin with 5V and confirm the computer measures it as '0'. \
 Repeat for every pin;\r\n>Connect each pin to ground and confirm the computer measures it as '1'. \
 Repeat for every pin.\r\nAfter the measurements, and while feeding 5V to pin 1 on expander J5, \
-press 'G 0' <ENTER> to proceed to the first operation.\r\n");
+press 'G' <ENTER> to proceed to the first operation.\r\n");
             currentConfig=inPullupInverted;
             return getOneAtATime1;
             break;
@@ -1162,7 +1162,7 @@ each pin's individual voltage. It should be 5V.\r\nThen, repeat the following fo
 >Feed each pin with 5V and confirm the computer measures it as '0'. \
 Repeat for every pin;\r\n>Connect each pin to ground and confirm the computer measures it as '1'. \
 Repeat for every pin.\r\nAfter the measurements, and while feeding 5V to pin 1 on expander J5, \
-press 'G 0' <ENTER> to proceed to the first operation.\r\n");
+press 'G' <ENTER> to proceed to the first operation.\r\n");
             currentConfig=end;
             return getOneAtATime1;
             break;

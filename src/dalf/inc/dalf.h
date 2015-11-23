@@ -63,17 +63,19 @@
 //                      E R R O R     L I S T                                //
 ///////////////////////////////////////////////////////////////////////////////
 #define NoErr       0           // Success
-#define eParseErr   1           // Syntax (eg; unexpected buffer empty)
-#define eNumArgsErr 2           // Arg count
-#define eParmErr    3           // Bad parameter value
-#define eModeErr    4           // Invalid operating mode
-#define eFrameErr   5           // Framing Error
-#define eOvRunErr   6           // OverRun Error 
-#define eBuffFull   7           // Buffer Full while receiving data.
-#define eProtocol   8           // Packet Protocol Error.
-#define eChkSum     9           // Check Sum.
-#define eTimeOut    10          // Timeout.
-#define eDisable    11          // Interface disabled.
+#define eErr        1           // Generic error
+#define eParseErr   2           // Syntax (eg; unexpected buffer empty)
+#define eNumArgsErr 3           // Arg count
+#define eParmErr    4           // Bad parameter value
+#define eModeErr    5           // Invalid operating mode
+#define eFrameErr   6           // Framing Error
+#define eOvRunErr   7           // OverRun Error 
+#define eBuffFull   8           // Buffer Full while receiving data.
+#define eProtocol   9           // Packet Protocol Error.
+#define eChkSum     10          // Check Sum.
+#define eTimeOut    11          // Timeout.
+#define eDisable    12          // Interface disabled.
+
 
 
 //////////////////////////////////////////////////////////////
@@ -264,11 +266,12 @@ void KickWatchdog(void);
 #endif
 DWORD CalculateDelayMs(PTIME start, PTIME end);
 void EmergencyStopMotors(void);
-void LockMotorsAccess(void);
-void UnlockMotorsAccess(void);
+void LockCriticalResourcesAccess(void);
+void UnlockCriticalResourcesAccess(void);
 BYTE TeCmdDispatchExt(void);
 BYTE I2C2CmdDispatchExt(void);
 BYTE TeProcessAck(void);
+BYTE TeDisableAck(void);
 BYTE TE_CmdParseExt(void);
 
 void OpenLoopTune1(void);
@@ -582,7 +585,7 @@ void Greeting(void);
 #define MAXSAMPLES 0x3e7    //999 - Maximum samples collected when measuring step response
 
 //Command line extension definitions
-#define CustomCmdIdOffset   0x20    //identifier of the first custom command, "G 'X'"
+#define CUSTOM_CMD_ID_OFFSET   16    //identifier of the first custom command (not bellonging to the extended dalf application), "G 'X'"
 
 extern void (*AckCallback)(void);  //pointer to ack callback
 
@@ -622,8 +625,6 @@ extern  BYTE    CMD,ARG[16],ARGN;           // parsed command info
 extern  BYTE    SCFG;                       // Serial Configuration (1..3)
 extern  BYTE    Mtr2_Flags2;                // Motor2 flags2
 extern  BYTE    Mtr1_Flags2;                // Motor1 flags2
-extern  short long  encode1;                // Mtr1 position encoder
-extern  short long  encode2;                // Mtr2 position encoder
 extern WORD OL2Limit;                       
 extern WORD OL1Limit;
 extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
@@ -638,7 +639,7 @@ extern  BYTE    CmdSource;
 #define VERBOSITY_LEVEL_WARNING         0x02
 #define VERBOSITY_LEVEL_STATUS          0x04
 #define VERBOSITY_LEVEL_DEBUG           0x08
-#define VERBOSITY_LEVEL_MSG             0x0F
+#define VERBOSITY_LEVEL_MSG             0x0F //Prints if any of the previous four is enabled
 
 #define VERBOSITY_USE_CALL_INFO         0x40
 #define VERBOSITY_USE_TIMESTAMP         0x80
@@ -655,6 +656,15 @@ extern  BYTE    CmdSource;
 #define STATUS_MSG(ARGS)            PRINT_VERBOSITY_MSG("STATUS: \t",VERBOSITY_LEVEL_STATUS,ARGS)
 #define DEBUG_MSG(ARGS)             PRINT_VERBOSITY_MSG("DEBUG:  \t",VERBOSITY_LEVEL_DEBUG,ARGS)
 #define MSG(ARGS)                   PRINT_VERBOSITY_MSG("",VERBOSITY_LEVEL_MSG,ARGS)
+
+/* prints and the test module occupy a lot of space. You may reach a point where program memory is
+full. In that case, you may need to not compile some of those traces */
+#ifdef REMOVE_DEBUG_PRINTS
+#undefine DEBUG_MSG
+#endif
+#ifdef REMOVE_STATUS_PRINTS
+#undefine STATUS_MSG
+#endif
 
 /*Remember that the __LINE__ macro says it is one line above the actual line on the .c, because of
 the 1st line workaround; so we fix it here*/

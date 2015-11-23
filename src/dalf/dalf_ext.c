@@ -111,6 +111,7 @@ DWORD CalculateDelayMs(PTIME start, PTIME end)
 
 void LOG_LogInit(void)
 {
+    ERROR_MSG("LOG_LogInit not implemented.\r\n");
     return;
 }
 
@@ -125,7 +126,6 @@ void SystemInitExt(void)
 {
     //This has to be the first action of this function!!
     SystemInit();
-    //TODO: Set io sample period to a default, if the io poll is defined.
     //TODO: find out if we just recovered from a hard reset (watchdog) or it's a power-on
     return;
 }
@@ -134,11 +134,13 @@ void SystemInitExt(void)
 
 void InitWatchdog(void)
 {
+    ERROR_MSG("InitWatchdog not implemented.\r\n");
     return;
 }
 
 void KickWatchdog(void)
 {
+    ERROR_MSG("KickWatchdog not implemented.\r\n");
     return;
 }
 
@@ -161,6 +163,10 @@ BYTE TeCmdDispatchExt(void)
         #endif
             break;
         case 'G':
+            if (ARGN==0)
+            {
+                return TeProcessAck();
+            }
             switch (ARG[0])
             {
                 /*custom functions index:
@@ -169,11 +175,11 @@ BYTE TeCmdDispatchExt(void)
                 to be parsed before calling the ROVIM dispatch*/
                 case 0:
                     return TeProcessAck();
-                    break;
+                case 1:
+                    return TeDisableAck();
                 default:
-                    return eParseErr;
+                    return ROVIM_T2D_CmdDispatch();
             }
-            return ROVIM_T2D_CustomCmdDispatch();
             break;
         default:
             return TeCmdDispatch();
@@ -197,9 +203,9 @@ BYTE I2C2CmdDispatchExt(void)
 
 BYTE TeProcessAck(void)
 {
-    if(ARGN != 1)
+    if(ARGN > 1)
     {
-        return eParseErr;
+        return eNumArgsErr;
     }
 
     if(AckCallback != NULL)
@@ -207,34 +213,53 @@ BYTE TeProcessAck(void)
         AckCallback();
     }
     //call registered functions to process the ack
-    STATUS_MSG("There are no pending tasks to resume!\r\n");
+    STATUS_MSG("There are no tasks pending user validation to resume.\r\n");
     return NoErr;
+}
+
+BYTE TeDisableAck(void)
+{
+    if(ARGN != 1)
+    {
+        return eNumArgsErr;
+    }
+    
+    AckCallback=NULL;
+    STATUS_MSG("Tasks pending user validation were terminated.\r\n");
 }
 
 #ifdef HELP_ENABLED
 // Help submodule ----------------------------------------------------------------------------------
 BYTE ShowHelp(void)
 {
+    ERROR_MSG("ShowHelp not implemented.\r\n");
     return eDisable;
 }
 
 void RegisterCmdhelp(void)
 {
+    ERROR_MSG("RegisterCmdhelp not implemented.\r\n");
     return;
 }
 
 #endif
 
-void LockMotorsAccess(void)
+void LockCriticalResourcesAccess(void)
 {
+    ERROR_MSG("LockCriticalResourcesAccess not implemented.\r\n");
     return;
 }
 
-void UnlockMotorsAccess(void)
+void UnlockCriticalResourcesAccess(void)
 {
+    ERROR_MSG("UnlockCriticalResourcesAccess not implemented.\r\n");
     return;
 }
 
+/*void ScheduleTask(ROVIM_T2D_ConcludeLockdown,5500,FALSE);
+{
+    
+}*/
 
 // GPIO sub-driver ---------------------------------------------------------------------------------
 /*Remark: Due to the nature of this application, where all possible GPIOs are known beforehand, 
@@ -523,15 +548,23 @@ BOOL SetGPIO(const rom char* name)
     SET: number |= 1 << x;*/
     value = previousValue | (1U << IOEXP_PIN_BIT_OFFSET(config.number));
     
-    //Write the new value
-    if(config.exp == J5){
-        WriteIOExp2(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+    //Write the new value only if needed
+    if(previousValue!=value)
+    {
+        if(config.exp == J5){
+            WriteIOExp2(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+        }
+        else{
+            WriteIOExp1(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+        }
     }
-    else{
-        WriteIOExp1(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+    else
+    {
+        DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");
     }
-    DEBUG_MSG("SetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous value=%08b, current \
-value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    
+    DEBUG_MSG("SetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%08b, current \
+bit value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
     (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
@@ -587,16 +620,23 @@ BOOL ResetGPIO(const rom char* name)
     RESET: number &= ~(1 << x);*/
     value = previousValue & (~(1U << IOEXP_PIN_BIT_OFFSET(config.number)));
     
-    //Write the new value
-    if(config.exp == J5){
-        WriteIOExp2(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+    //Write the new value only if needed
+    if(previousValue!=value)
+    {
+        if(config.exp == J5){
+            WriteIOExp2(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+        }
+        else{
+            WriteIOExp1(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+        }
     }
-    else{
-        WriteIOExp1(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
+    else
+    {
+        DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");
     }
 
-    DEBUG_MSG("ResetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous value=%08b, current \
-value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    DEBUG_MSG("ResetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%08b, current \
+bit value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
     (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
@@ -659,8 +699,8 @@ BOOL ToggleGPIO(const rom char* name)
         WriteIOExp1(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
 
-    DEBUG_MSG("ToggleGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous value=%08b, current \
-value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    DEBUG_MSG("ToggleGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%08b, current \
+bit value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
     (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
