@@ -35,10 +35,14 @@ static BYTE verbosity = VERBOSITY_DISABLED;     //controls the verbosity of the 
 
 void (*AckCallback)(void) = NULL;
 
-WORD OL2Limit = 0;
-WORD OL1Limit = 0;
-WORD nol1 = 0;                      // Motor1 Open Loop step response output count
-WORD nol2 = 0;                      // Motor2 Open Loop step response output count
+static BOOL CriticalResourcesToLock=FALSE;
+
+static const BYTE StandardCommandsToAllow[]={'C','E','G','H','I','K','L','O','P','R','U','V','X'};
+static const BYTE nStandardCommandsToAllow=(BYTE) (sizeof(StandardCommandsToAllow)/sizeof(StandardCommandsToAllow[0]));
+//Dalf extended commands ("G #") to block while on lockdown
+static const BYTE ExtendedCommandsToAllow[]={0,1,2};
+static const BYTE nExtendedCommandsToAllow=(BYTE) (sizeof(ExtendedCommandsToAllow)/sizeof(ExtendedCommandsToAllow[0]));
+
 ///////////////////////////////////////////////////////////////////////////////
 //Debug reporting features.
 ///////////////////////////////////////////////////////////////////////////////
@@ -153,19 +157,20 @@ BYTE TeCmdDispatchExt(void)
 {
     //XXX: create the lock motors access feature here
     DEBUG_PrintCmd();
+    if( IsStandardCommandLocked(CMD) )
+    {
+        return eDisable;
+    }
     switch(CMD)
     {
-        case 'H':
-        #ifdef HELP_ENABLED
-            return ShowHelp();
-        #else
-            return eDisable;
-        #endif
-            break;
         case 'G':
             if (ARGN==0)
             {
                 return TeProcessAck();
+            }
+            if( IsExtendedCommandLocked(ARG[0]) )
+            {
+                return eDisable;
             }
             switch (ARG[0])
             {
@@ -178,9 +183,25 @@ BYTE TeCmdDispatchExt(void)
                 case 1:
                     return TeDisableAck();
                 default:
+                    #ifdef DALF_ROVIM_T2D
                     return ROVIM_T2D_CmdDispatch();
+                    #else //DALF_ROVIM_T2D
+                    return eParseErr
+                    #endif //DALF_ROVIM_T2D
             }
             break;
+        case 'H':
+        #ifdef HELP_ENABLED
+            return ShowHelp();
+        #else
+            return eDisable;
+        #endif
+            break;
+        case 'O':
+            #ifdef DALF_ROVIM_T2D
+            WARNING_MSG("Motor configurations lost. Make sure to restore them before normal operation.\r\n");
+            #endif //DALF_ROVIM_T2D
+            //fall through
         default:
             return TeCmdDispatch();
             break;
@@ -246,14 +267,67 @@ void RegisterCmdhelp(void)
 
 void LockCriticalResourcesAccess(void)
 {
-    ERROR_MSG("LockCriticalResourcesAccess not implemented.\r\n");
+    /*given which and how GPIOs are currently used, they do not need special protection. If needed
+    in the future, it should be added.*/
+    CriticalResourcesToLock=TRUE;
+    #ifdef DALF_ROVIM_T2D
+    ROVIM_T2D_LockCriticalResourcesAccess();
+    #endif
     return;
 }
 
 void UnlockCriticalResourcesAccess(void)
 {
-    ERROR_MSG("UnlockCriticalResourcesAccess not implemented.\r\n");
+    CriticalResourcesToLock=FALSE;
+    #ifdef DALF_ROVIM_T2D
+    ROVIM_T2D_UnlockCriticalResourcesAccess();
+    #endif
     return;
+}
+
+BOOL IsStandardCommandLocked(BYTE cmd)
+{
+    BYTE i;
+    
+    if(!CriticalResourcesToLock)
+    {
+        return FALSE;
+    }
+    
+    for(i=0;i<nStandardCommandsToAllow;i++)
+    {
+        if( cmd==StandardCommandsToAllow[i])
+        {
+            return FALSE;
+        }
+    }
+    DEBUG_MSG("Command is locked.\r\n");
+    return TRUE;
+}
+
+BOOL IsExtendedCommandLocked(BYTE cmd)
+{
+    BYTE i;
+    
+    if(!CriticalResourcesToLock)
+    {
+        return FALSE;
+    }
+    if (cmd > CUSTOM_CMD_ID_OFFSET)
+    {
+        //command does not exist in extended command set. nExtendedCommandsToLock[] is incorrect
+        return TRUE;
+    }
+    
+    for(i=0;i<nExtendedCommandsToAllow;i++)
+    {
+        if( cmd==ExtendedCommandsToAllow[i])
+        {
+            return FALSE;
+        }
+    }
+    DEBUG_MSG("Command is locked.\r\n");
+    return TRUE;
 }
 
 /*void ScheduleTask(ROVIM_T2D_ConcludeLockdown,5500,FALSE);
@@ -563,8 +637,8 @@ BOOL SetGPIO(const rom char* name)
         DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");
     }
     
-    DEBUG_MSG("SetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%08b, current \
-bit value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    DEBUG_MSG("SetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%b, current \
+bit value=%b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
     (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
@@ -635,8 +709,8 @@ BOOL ResetGPIO(const rom char* name)
         DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");
     }
 
-    DEBUG_MSG("ResetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%08b, current \
-bit value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    DEBUG_MSG("ResetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%b, current \
+bit value=%b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
     (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }
@@ -699,8 +773,8 @@ BOOL ToggleGPIO(const rom char* name)
         WriteIOExp1(OLATA + IOEXP_REG_BANK_OFFSET(config.number), value);
     }
 
-    DEBUG_MSG("ToggleGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%08b, current \
-bit value=%08b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
+    DEBUG_MSG("ToggleGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%b, current \
+bit value=%b.\r\n", (config.exp==J5)?5:6, config.number, ('A' + IOEXP_REG_BANK_OFFSET(config.number)),\
     (IOEXP_PIN_BIT_OFFSET(config.number) +1), previousValue, value);
     return TRUE;
 }

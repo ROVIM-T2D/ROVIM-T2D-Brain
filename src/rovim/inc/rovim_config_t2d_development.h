@@ -23,12 +23,7 @@
 #ifndef __ROVIM_CONFIG_V0_1_H
 #define __ROVIM_CONFIG_V0_1_H
 
-#define WATCHDOG_PERIOD 0xFA        //250 ms
-
 //use maximum verbosity
 #define INIT_VERBOSITY_LEVEL 0x0F   //disable call info verbosity for now, due to the issue with the #line directive
-
-//Default sample period for the io expander
-#define IO_SAMPLE_PERIOD 0xA       //10 ms
 
 #endif /*__ROVIM_CONFIG_V0_1_H*/

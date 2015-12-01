@@ -77,7 +77,7 @@
 #include    <stdio.h>
 
 //choose the configuration profile
-#include    "rovim.h"                           /* description and configuration of the ROVIM system */
+#include    "rovim_t2d.h"                           /* description and configuration of the ROVIM system */
 
 #ifdef DALF_TEST_ENABLED
     #include    "dalf_test.h"                           /* testing and debugging features */
@@ -86,7 +86,9 @@
 /* Function Prototypes */
 void    ISRHI ( void );
 void    ISRLO ( void );
-void    INT1_ISR_SINGLE (void);
+#ifdef DALF_ROVIM_T2D
+void    INT1_ISR_SINGLE_SOURCE (void);
+#endif //DALF_ROVIM_T2D
 //void  Greeting(void);             // Terminal emulator greeting
 
     // Command Handling
@@ -111,9 +113,9 @@ WORD    PulseConvert(WORD Pulse);   // PulseWidth ticks to microseconds
 WORD    AdcToVbatt(WORD v6);        // AN6 mV to Vbatt mV
 
     // Move Motor 
-//void  SoftStop(BYTE mtr);         // Stop Motor, leaving mode unchanged.
-//void  MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
-void    MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a);
+//void    SoftStop(BYTE mtr);         // Stop Motor, leaving mode unchanged.
+//void    MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
+//void    MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a);
 
     // Output
 //int       printf(const rom char *fmt, ...);
@@ -176,17 +178,17 @@ extern WORD VBWARN;
 extern BYTE AMINP;
 extern WORD MAXERR, MAXSUM;
 
-// extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
+extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
 extern WORD ACC1, VMID1;
-extern BYTE VSP1;
+//extern BYTE VSP1;
 extern WORD KP1, KI1, KD1;
-extern BYTE VMIN1, VMAX1;
-extern WORD TPR1;
+//extern BYTE VMIN1, VMAX1;
+//extern WORD TPR1;
 extern WORD MIN1, MAX1;
 
 // extern BYTE  MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
-extern WORD ACC2, VMID2;
-extern BYTE VSP2;
+//extern WORD ACC2, VMID2;
+//extern BYTE VSP2;
 extern WORD KP2, KI2, KD2;
 extern BYTE VMIN2, VMAX2;
 extern WORD TPR2;
@@ -255,10 +257,10 @@ extern  WORD    RC3center;                  // Pulse range center (uSec)
 extern  WORD    Pid1Limit;                  // Motor1 Tuning Output Control
 extern  WORD    npid1;                      // Motor1 PID Tuning Output count
 extern  BYTE    Mtr1_Flags1;                // Motor1 flags1
-//extern    BYTE    Mtr1_Flags2;                // See dalf.h
+extern  BYTE    Mtr1_Flags2;                // See dalf.h
 extern  BYTE    S1,Power1;                  // SPD: [0..100%], [0..VMAX1%]
 extern  short long  encode1;                // Mtr1 position encoder
-extern  short long  V1;                     // Mtr1 Velocity
+//extern  short long  V1;                   // Mtr1 Velocity
 extern  short long  x1pos;                  // Motor1 PID Target
 extern  short long  Err1;                   // Motor1 PID Err
 extern  short long  ErrDiff1;               // Motor1 PID Err Diff (dErr/dT)
@@ -266,13 +268,13 @@ extern  short long  ErrSum1;                // Motor1 PID Err Sum
 
 extern  WORD    Pid2Limit;                  // Motor2 Tuning Output Control
 extern  WORD    npid2;                      // Motor2 PID Tuning: Output count.
-extern  BYTE    Mtr2_Flags1;                // Motor2 flags1
+//extern  BYTE    Mtr2_Flags1;              // Motor2 flags1 
 //extern    BYTE    Mtr2_Flags2;            // See dalf.h
 extern  BYTE    S2,Power2;                  // SPD: [0..100%], [0..VMAX2%]
 extern  short long  encode2;                // Mtr2 position encoder
-extern  short long  V2;                     // Mtr2 Velocity
+//extern  short long  V2;                   // Mtr2 Velocity
 extern  short long  x2pos;                  // Motor2 PID Targets
-extern  short long  Err2;                   // Motor2 PID Err
+//extern  short long  Err2;                   // Motor2 PID Err
 extern  short long  ErrDiff2;               // Motor2 PID Err Diff (dErr/dT)
 extern  short long  ErrSum2;                // Motor2 PID Err Sum
 
@@ -294,7 +296,7 @@ extern  BYTE    Cmd_Ticks;                  // Cmd Interface Timeout ticker
 //*****************************************
 //**          Other Variables            **
 //*****************************************
-WORD    ioexpcount; // IO expander frequency counter;
+
 #ifdef WATCHDOG_ENABLED
     WORD watchdogcount = WATCHDOG_PERIOD;
 #endif
@@ -1230,6 +1232,16 @@ void SoftStop(BYTE mtr)
     // Cmd_O, it will not disable R/C and POT mode operations  //
     // provided that CmdSource is defined properly.            //
     /////////////////////////////////////////////////////////////
+    #ifdef DALF_ROVIM_T2D
+    if(mtr==3)
+    {
+        //Stop traction motor and set it on hill hold
+        CMD = 'G';
+        ARG[0] = ROVIM_T2D_SET_MOVEMENT_CMD_CODE;
+        ARGN = 1;
+        TeCmdDispatchExt();
+    }
+    #endif  //DALF_ROVIM_T2D
     CMD = 'X';
     ARG[0] = mtr;
     ARG[1] = FORWARD;
@@ -1413,7 +1425,7 @@ void DispE(void)
 void DispV(void)
 {
     short long  V;
-    long temp1,temp2,vel;
+    long temp1,temp2,velRPM;
 
     DispSvc &= ~VreqMsk;        // Clear request flag
 
@@ -1464,19 +1476,26 @@ void DispV(void)
         { // If Motor 1 or both
             temp1 = (long)V1 * 60000;
             temp2 = (long)TPR1 * VSP1;
-            vel = temp1/temp2;
+            velRPM = temp1/temp2;
             if(MTR1_MODE3 & VelDecMask)
-                 printf("V1: %08Hd (%5ld rpm)\r\n", V1,vel);
-            else printf("V1: %06HX (%5ld rpm)\r\n", V1,vel);
+                 printf("V1: %08Hd (%5ld rpm)", V1, velRPM);
+            else printf("V1: %06HX (%5ld rpm)", V1, velRPM);
+            if(vel1)    //If we are in ROVIM_T2D_MODE, print additional info
+                 printf(" (%5ld Km/10/h). Acc=%5ld Km/10/h/s\r\n", vel1, acc1);
+            else printf("\r\n");
         }
         if( (DataReq==0x02) || (DataReq==0xFF) )
         { // If Motor 2 or both
             temp1 = (long)V2 * 60000;
             temp2 = (long)TPR2 * VSP2;
-            vel = temp1/temp2;
+            velRPM = temp1/temp2;
             if(MTR2_MODE3 & VelDecMask)
-                 printf("V2: %08Hd (%5ld rpm)\r\n", V2,vel);
-            else printf("V2: %06HX (%5ld rpm)\r\n", V2,vel);
+                 printf("V2: %08Hd (%5ld rpm)", V2,velRPM);
+            else printf("V2: %06HX (%5ld rpm)", V2,velRPM);
+            if(vel2)    //If we are in ROVIM_T2D_MODE, print additional info
+                printf(" (%5ld º/10/s)\r\n", vel2);
+            else printf("\r\n");
+            
         }
     } // If TE
     //----------------------------
@@ -2685,7 +2704,19 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
 
     // Conditionally service on-board LED's
     ledcount--; if(!ledcount) { ledcount=LED_PERIOD; ServiceLED(); }
-    ioexpcount--;if(!ioexpcount) { ioexpcount=IO_SAMPLE_PERIOD; ROVIM_T2D_ServiceIO(); }
+    #ifdef DALF_ROVIM_T2D
+    ROVIM_T2D_sysmonitorcount--; if(!ROVIM_T2D_sysmonitorcount)
+    { 
+        ROVIM_T2D_sysmonitorcount=ROVIM_T2D_SYSTEM_MONITOR_PERIOD;
+        ROVIM_T2D_MonitorSystem();
+    }
+    ROVIM_T2D_pwmrefreshcount--;if(!ROVIM_T2D_pwmrefreshcount)
+    {
+        ROVIM_T2D_pwmrefreshcount=ROVIM_T2D_PWM_REFRESH_PERIOD;
+        ROVIM_T2D_ServicePWM();
+    }
+    #endif //DALF_ROVIM_T2D
+    
 #ifdef WATCHDOG_ENABLED
     watchdogcount--; if(!watchdogcount) {watchdogcount=WATCHDOG_PERIOD; KickWatchdog(); }
 #endif
@@ -2728,7 +2759,11 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
     ////////////////////////////////////////
     if(TIMESVC & Vsp1Msk)   // If time to sample Motor Velocity
     {
+        #ifdef DALF_ROVIM_T2D
+        ROVIM_T2D_UpdateVel1Acc1();  // Update Motor Velocity and Acceleration
+        #else //DALF_ROVIM_T2D
         UpdateVelocity1();  // Update Motor Velocity
+        #endif //DALF_ROVIM_T2D
         Trajectory1();      // Conditional mtr1 trajectory
         PID1();             // Conditional mtr1 PID Control Update
         Tune1();            // Conditional mtr1 PID tuning output
@@ -2739,7 +2774,11 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
     ////////////////////////////////////////
     if(TIMESVC & Vsp2Msk)   // If time to sample Motor Velocity
     {
+        #ifdef DALF_ROVIM_T2D
+        ROVIM_T2D_UpdateVel2();  // Update Motor Velocity
+        #else //DALF_ROVIM_T2D
         UpdateVelocity2();  // Update Motor Velocity
+        #endif //DALF_ROVIM_T2D
         Trajectory2();      // Conditional mtr2 trajectory
         PID2();             // Conditional mtr2 PID Control Update
         Tune2();            // Conditional mtr2 PID tuning output
@@ -2964,9 +3003,13 @@ void main (void)
 
     //XXX: this initialization order really has to be studied and tested, and validated.
 
+    #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_Init();       //ROVIM System Initialization
 
+    /*This function does not need interrupts to work. However, print output will are done through
+    interrupts. The function seems to work fine at this stage of execution, so it will stay here*/
     ROVIM_T2D_Lockdown();  // Lock the brakes as soon as possible - safety first
+    #endif //DALF_ROVIM_T2D
     
 #ifdef DALF_TEST_ENABLED
     TEST_TestInit();        //Testing Module Initialization
@@ -2991,7 +3034,9 @@ void main (void)
 
     WinkLEDS();             // Wink LED's to indicate power on reset.
 
+    #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_Greeting();
+    #endif //DALF_ROVIM_T2D
 
     /*TODO: delete. This verification will be done inside the ReleaseFromLockdown() function,
 and this action will have to be performed by the user    
@@ -3007,7 +3052,10 @@ and this action will have to be performed by the user
         //XXX: Should I do something else here? Like wait indefinitely?
     }*/
 
+    #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_Start();
+    #endif //DALF_ROVIM_T2D
+    
     //continuously monitor the changes we're doing, to avoid bigger troubles in the
     //future
 #ifdef DALF_TEST_ENABLED
@@ -3015,7 +3063,6 @@ and this action will have to be performed by the user
     //TEST_StartGPIODriverTest();
 #endif
     
-
 //  ***************************************************************************
 //  *                         M A I N    L O O P                              *
 //  *                                                                         *
@@ -3078,7 +3125,11 @@ void ISRHI (void)
     if ( (INTCONbits.INT0IE == 1) && (INTCONbits.INT0IF == 1) ) INT0_ISR();
 
     // If INT1 Interrupt (AB1INT: Mtr1 encoder)
-    if ( (INTCON3bits.INT1IE == 1) && (INTCON3bits.INT1IF == 1) ) INT1_ISR_SINGLE();
+    #ifdef DALF_ROVIM_T2D
+    if ( (INTCON3bits.INT1IE == 1) && (INTCON3bits.INT1IF == 1) ) INT1_ISR_SINGLE_SOURCE();
+    #else //DALF_ROVIM_T2D
+    if ( (INTCON3bits.INT1IE == 1) && (INTCON3bits.INT1IF == 1) ) INT1_ISR();
+    #endif //DALF_ROVIM_T2D
 
     // If TX1 Interrupt (Cmd Interface Xmit)
     if ( (PIE1bits.TX1IE == 1) && (PIR1bits.TX1IF == 1) ) TX1_ISR();
@@ -3105,10 +3156,11 @@ void ISRLO (void)
 {
 }
 
+#ifdef DALF_ROVIM_T2D
 // Custom handler for INT1 Interrupt (AB1INT: Mtr1 encoder), for a single-source encoder
 /* This ISR reads a single source encoder signal, and ignore quadrature signals and
 direction calculations.*/
-void INT1_ISR_SINGLE (void)
+void INT1_ISR_SINGLE_SOURCE (void)
 {
     INTCON3bits.INT1IF=0;
     //XXX: Should I actually read the port value instead of just assuming each interrupt is a pulse?
@@ -3120,4 +3172,5 @@ void INT1_ISR_SINGLE (void)
       */
     encode1++;
 }
+#endif //DALF_ROVIM_T2D
 //----------------------------------------------------------------------------

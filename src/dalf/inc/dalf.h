@@ -76,7 +76,8 @@
 #define eTimeOut    11          // Timeout.
 #define eDisable    12          // Interface disabled.
 
-
+//define absolute
+#define abs(x) ((x) > 0 ? (x) : -(x))
 
 //////////////////////////////////////////////////////////////
 //                    S T R U C T U R E S                   //
@@ -268,6 +269,8 @@ DWORD CalculateDelayMs(PTIME start, PTIME end);
 void EmergencyStopMotors(void);
 void LockCriticalResourcesAccess(void);
 void UnlockCriticalResourcesAccess(void);
+BOOL IsStandardCommandLocked(BYTE cmd);
+BOOL IsExtendedCommandLocked(BYTE cmd);
 BYTE TeCmdDispatchExt(void);
 BYTE I2C2CmdDispatchExt(void);
 BYTE TeProcessAck(void);
@@ -278,6 +281,7 @@ void OpenLoopTune1(void);
 void OpenLoopTune2(void);
 void SoftStop(BYTE mtr);
 void MoveMtrOpenLoop(BYTE mtr, BYTE dir, BYTE spd, BYTE slew);
+void MoveMtrClosedLoop(BYTE mtr, short long tgt, WORD v, WORD a);
 
 //support functions
 void DEBUG_PrintCmd(void);
@@ -579,6 +583,8 @@ void Greeting(void);
 // Motor Equates
 #define FORWARD     0x00    // Direction
 #define REVERSE     0x01    // Direction
+#define NEUTRAL     0x02    // Movement type
+#define HILLHOLD    0x03    // Movement type
 #define SPEEDZERO   0x00    // Speed
 
 //Step Response
@@ -617,18 +623,22 @@ typedef enum{
 //          Other variables declarations          //
 ////////////////////////////////////////////////////
 
-extern  WORD    ioexpcount;                 // IO expander frequency counter;
 #ifdef WATCHDOG_ENABLED
     extern WORD watchdogcount;
 #endif
 extern  BYTE    CMD,ARG[16],ARGN;           // parsed command info
 extern  BYTE    SCFG;                       // Serial Configuration (1..3)
 extern  BYTE    Mtr2_Flags2;                // Motor2 flags2
-extern  BYTE    Mtr1_Flags2;                // Motor1 flags2
-extern WORD OL2Limit;                       
-extern WORD OL1Limit;
-extern BYTE MTR1_MODE1, MTR1_MODE2, MTR1_MODE3;
+extern  BYTE    Mtr2_Flags1;                // Motor2 flags1
+extern  short long  Err2;                   // Motor2 PID Err
+extern  short long  V1;                     // Mtr1 Velocity
+extern  short long  V2;                     // Mtr2 Velocity
 extern BYTE MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
+extern BYTE VMIN1, VMAX1;
+extern WORD TPR1;
+extern BYTE VSP1;
+extern BYTE VSP2;
+extern WORD ACC2, VMID2;
 extern  BYTE    CmdSource;
 
 #define TIME_TO_MSEC(x) ((x.secs*1000) + (x.ticks>>5))
