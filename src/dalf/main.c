@@ -258,7 +258,7 @@ extern  WORD    Pid1Limit;                  // Motor1 Tuning Output Control
 extern  WORD    npid1;                      // Motor1 PID Tuning Output count
 extern  BYTE    Mtr1_Flags1;                // Motor1 flags1
 extern  BYTE    Mtr1_Flags2;                // See dalf.h
-extern  BYTE    S1,Power1;                  // SPD: [0..100%], [0..VMAX1%]
+//extern  BYTE    S1,Power1;                  // SPD: [0..100%], [0..VMAX1%]
 extern  short long  encode1;                // Mtr1 position encoder
 //extern  short long  V1;                   // Mtr1 Velocity
 extern  short long  x1pos;                  // Motor1 PID Target
@@ -270,11 +270,11 @@ extern  WORD    Pid2Limit;                  // Motor2 Tuning Output Control
 extern  WORD    npid2;                      // Motor2 PID Tuning: Output count.
 //extern  BYTE    Mtr2_Flags1;              // Motor2 flags1 
 //extern    BYTE    Mtr2_Flags2;            // See dalf.h
-extern  BYTE    S2,Power2;                  // SPD: [0..100%], [0..VMAX2%]
+//extern  BYTE    S2,Power2;                  // SPD: [0..100%], [0..VMAX2%]
 extern  short long  encode2;                // Mtr2 position encoder
 //extern  short long  V2;                   // Mtr2 Velocity
 extern  short long  x2pos;                  // Motor2 PID Targets
-//extern  short long  Err2;                   // Motor2 PID Err
+extern  short long  Err2;                   // Motor2 PID Err
 extern  short long  ErrDiff2;               // Motor2 PID Err Diff (dErr/dT)
 extern  short long  ErrSum2;                // Motor2 PID Err Sum
 
@@ -1240,6 +1240,7 @@ void SoftStop(BYTE mtr)
         ARG[0] = ROVIM_T2D_SET_MOVEMENT_CMD_CODE;
         ARGN = 1;
         TeCmdDispatchExt();
+        return;
     }
     #endif  //DALF_ROVIM_T2D
     CMD = 'X';
@@ -1490,11 +1491,8 @@ void DispV(void)
             temp2 = (long)TPR2 * VSP2;
             velRPM = temp1/temp2;
             if(MTR2_MODE3 & VelDecMask)
-                 printf("V2: %08Hd (%5ld rpm)", V2,velRPM);
-            else printf("V2: %06HX (%5ld rpm)", V2,velRPM);
-            if(vel2)    //If we are in ROVIM_T2D_MODE, print additional info
-                printf(" (%5ld º/10/s)\r\n", vel2);
-            else printf("\r\n");
+                 printf("V2: %08Hd (%5ld rpm)\r\n", V2,velRPM);
+            else printf("V2: %06HX (%5ld rpm)\r\n", V2,velRPM);
             
         }
     } // If TE
@@ -2446,19 +2444,26 @@ void    ServiceLED(void)        // Periodic LED service
     ledshift >>= 1; if(!ledshift) ledshift = 0x80000000;
 
     // Determine appropriate LED1 pattern
+    //TODO: figure this out
     if(!Power1)                             grn1pattern = LED_MTR_OFF;
+    //TODO: replace with dccdutycycle-no need
     else if(Mtr1_Flags1 & tga_Msk)          grn1pattern = LED_MTR_TGA;
+    //TODO: replace with accdutycycle [||]?? vel1
     else if(V1)                             grn1pattern = LED_MTR_OPENLP;
+    //TODO: replace with !inlockdown && [(!HILLHOLD && !manual)]?? && VB+ && !erroSigmaD
     else                                    grn1pattern = LED_MTR_STALL;
+    //Outras op??es: frente-tr?s
 
     // Determine appropriate LED2 pattern
     if(!Power2)                             grn2pattern = LED_MTR_OFF;
     else if(Mtr2_Flags1 & tga_Msk)          grn2pattern = LED_MTR_TGA;
     else if(V2)                             grn2pattern = LED_MTR_OPENLP;
+    //TODO: replace with !inlockdown vel1
     else                                    grn2pattern = LED_MTR_STALL;
 
     // Determine appropriate LED3 pattern
     if(LedErr==0)                           redpattern = LED_FULLOFF;
+    //TODO: replace with inlockdown
     else if(LedErr & (OC1msk + OC2msk))     redpattern = LED_OVERCURRENT;
     else if(LedErr & (SL1msk) + SL2msk)     redpattern = LED_SIGNAL_LOSS;
     else if(LedErr & VBATTmsk)              redpattern = LED_VBATT;
@@ -2705,12 +2710,15 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
     // Conditionally service on-board LED's
     ledcount--; if(!ledcount) { ledcount=LED_PERIOD; ServiceLED(); }
     #ifdef DALF_ROVIM_T2D
-    ROVIM_T2D_sysmonitorcount--; if(!ROVIM_T2D_sysmonitorcount)
-    { 
+    ROVIM_T2D_sysmonitorcount--;
+    //For debug purposes, this task can be triggered by the user
+    if((!ROVIM_T2D_sysmonitorcount) && (!ManualSysMonitoring))
+    {
         ROVIM_T2D_sysmonitorcount=ROVIM_T2D_SYSTEM_MONITOR_PERIOD;
         ROVIM_T2D_MonitorSystem();
     }
-    ROVIM_T2D_pwmrefreshcount--;if(!ROVIM_T2D_pwmrefreshcount)
+    ROVIM_T2D_pwmrefreshcount--;
+    if(!ROVIM_T2D_pwmrefreshcount)
     {
         ROVIM_T2D_pwmrefreshcount=ROVIM_T2D_PWM_REFRESH_PERIOD;
         ROVIM_T2D_ServicePWM();
@@ -2741,17 +2749,7 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
     //     R A M P I N G      S E R V I C E S      //
     /////////////////////////////////////////////////
     RampMotor1();           // Conditionally ramp mtr1
-    /*TODO: no longer used
-    if(TIMESVC & Vsp1Msk)   // If time to sample Motor Position
-    {
-        OpenLoopTune1();    // Conditional mtr1 open loop response output
-    }*/
     RampMotor2();           // Conditionally ramp mtr2
-    /*TODO: no longer used
-    if(TIMESVC & Vsp2Msk)   // If time to sample Motor Position
-    {
-        OpenLoopTune2();    // Conditional mtr2 open loop response output
-    }*/
 
 
     ////////////////////////////////////////
@@ -2774,11 +2772,7 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
     ////////////////////////////////////////
     if(TIMESVC & Vsp2Msk)   // If time to sample Motor Velocity
     {
-        #ifdef DALF_ROVIM_T2D
-        ROVIM_T2D_UpdateVel2();  // Update Motor Velocity
-        #else //DALF_ROVIM_T2D
         UpdateVelocity2();  // Update Motor Velocity
-        #endif //DALF_ROVIM_T2D
         Trajectory2();      // Conditional mtr2 trajectory
         PID2();             // Conditional mtr2 PID Control Update
         Tune2();            // Conditional mtr2 PID tuning output
@@ -3000,15 +2994,13 @@ void main (void)
 //**  SystemInit() is required.  If you need to reconfigure  **
 //**  resources, do it after SystemInit()                    **
 //*************************************************************
-
-    //XXX: this initialization order really has to be studied and tested, and validated.
-
     #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_Init();       //ROVIM System Initialization
 
-    /*This function does not need interrupts to work. However, print output will are done through
-    interrupts. The function seems to work fine at this stage of execution, so it will stay here*/
-    ROVIM_T2D_Lockdown();  // Lock the brakes as soon as possible - safety first
+    /*The actions performed by this function do not need interrupts to work. However, print outputs 
+    are done through interrupts. The function seems to work fine at this stage of execution, 
+    so it will stay here*/
+    ROVIM_T2D_Lockdown();  // Lock the brakes as soon as possible - safety first/
     #endif //DALF_ROVIM_T2D
     
 #ifdef DALF_TEST_ENABLED
@@ -3024,33 +3016,24 @@ void main (void)
     // Enable Interrupt System
     EnableInterrupts();
 
+#ifdef WATCHDOG_ENABLED
+    /*I don't think there's much problem in starting watchdog here instead of from power up,
+    because until here the signals that are activated are goo (safetywise), not bad
+    (such as acc, activate traction, etc.)*/
+    STATUS_MSG("Starting watchdog.\r\n");
+    DEBUG_MSG("Beware watchdog may actuate with debug traces enabled.\r\n");
+    InitWatchdog();
+#endif //WATCHDOG_ENABLED
+    
     // Select custom putc()
     stdout = _H_USER;
     stderr = _H_USER;
-    
-#ifdef WATCHDOG_ENABLED
-    InitWatchdog();
-#endif
 
     WinkLEDS();             // Wink LED's to indicate power on reset.
 
     #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_Greeting();
     #endif //DALF_ROVIM_T2D
-
-    /*TODO: delete. This verification will be done inside the ReleaseFromLockdown() function,
-and this action will have to be performed by the user    
-    //Check if the system is in a good, non-dangerous state before prooceding
-    
-    if ( FALSE != ROVIM_T2D_ValidateInitialState() )
-    {
-        // The vehicle is good to go
-        ROVIM_T2D_ReleaseFromLockdown();
-    }
-    else
-    {
-        //XXX: Should I do something else here? Like wait indefinitely?
-    }*/
 
     #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_Start();
@@ -3163,7 +3146,7 @@ direction calculations.*/
 void INT1_ISR_SINGLE_SOURCE (void)
 {
     INTCON3bits.INT1IF=0;
-    //XXX: Should I actually read the port value instead of just assuming each interrupt is a pulse?
+    //Q: Should I actually read the port value instead of just assuming each interrupt is a pulse?
     /*Q: Should this not be declared as volatile?
       A: I think it can work like this, because the variable may not be optimized in it's source
       object, and will therefore behave implicitly as volatile. But this is just an assumption.

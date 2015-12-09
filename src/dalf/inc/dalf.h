@@ -264,6 +264,7 @@ void SystemInitExt(void);
 #ifdef WATCHDOG_ENABLED
 void InitWatchdog(void);
 void KickWatchdog(void);
+void HardReset(void);
 #endif
 DWORD CalculateDelayMs(PTIME start, PTIME end);
 void EmergencyStopMotors(void);
@@ -630,7 +631,6 @@ extern  BYTE    CMD,ARG[16],ARGN;           // parsed command info
 extern  BYTE    SCFG;                       // Serial Configuration (1..3)
 extern  BYTE    Mtr2_Flags2;                // Motor2 flags2
 extern  BYTE    Mtr2_Flags1;                // Motor2 flags1
-extern  short long  Err2;                   // Motor2 PID Err
 extern  short long  V1;                     // Mtr1 Velocity
 extern  short long  V2;                     // Mtr2 Velocity
 extern BYTE MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
@@ -639,6 +639,8 @@ extern WORD TPR1;
 extern BYTE VSP1;
 extern BYTE VSP2;
 extern WORD ACC2, VMID2;
+extern  BYTE    S2,Power2;                  // SPD: [0..100%], [0..VMAX2%]
+extern  BYTE    S1,Power1;                  // SPD: [0..100%], [0..VMAX1%]
 extern  BYTE    CmdSource;
 
 #define TIME_TO_MSEC(x) ((x.secs*1000) + (x.ticks>>5))

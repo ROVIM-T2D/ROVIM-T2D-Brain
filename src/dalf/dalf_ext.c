@@ -28,6 +28,7 @@
 #include "dalf.h"
 #include "rovim.h"
 #include <string.h>
+#include "p18f6722.h"
 
 static BOOL GetGPIOConfigbyName(const rom char* name, IOPinConfig* config);
 
@@ -35,7 +36,7 @@ static BYTE verbosity = VERBOSITY_DISABLED;     //controls the verbosity of the 
 
 void (*AckCallback)(void) = NULL;
 
-static BOOL CriticalResourcesToLock=FALSE;
+static BOOL ResourcesLockFlag=FALSE;
 
 static const BYTE StandardCommandsToAllow[]={'C','E','G','H','I','K','L','O','P','R','U','V','X'};
 static const BYTE nStandardCommandsToAllow=(BYTE) (sizeof(StandardCommandsToAllow)/sizeof(StandardCommandsToAllow[0]));
@@ -138,14 +139,27 @@ void SystemInitExt(void)
 
 void InitWatchdog(void)
 {
-    ERROR_MSG("InitWatchdog not implemented.\r\n");
-    return;
+    /*We enable only watchdog after system initialization, instead of from power on (On the 
+    config register), because when running DEBUG traces, the bootup time will be longer than the
+    watchdog timeout, so the system will be constantly rebooting.
+    Also, this way I can test this feature using the debugger - much faster and straightforward
+    See PIC18F6722 datasheet, Section 25.2 - Watchdog timer for details.*/
+    volatile BYTE *wdtcon;
+    wdtcon = (volatile BYTE *)0xFD1;
+    ((*(volatile BYTE *)wdtcon) = (0x01));
+    
 }
 
 void KickWatchdog(void)
 {
-    ERROR_MSG("KickWatchdog not implemented.\r\n");
+    ClrWdt();
     return;
+}
+
+void HardReset(void)
+{
+    //wait for the watchdog to kick in
+    while(1);
 }
 
 #endif
@@ -155,7 +169,6 @@ void KickWatchdog(void)
 */
 BYTE TeCmdDispatchExt(void)
 {
-    //XXX: create the lock motors access feature here
     DEBUG_PrintCmd();
     if( IsStandardCommandLocked(CMD) )
     {
@@ -199,7 +212,8 @@ BYTE TeCmdDispatchExt(void)
             break;
         case 'O':
             #ifdef DALF_ROVIM_T2D
-            WARNING_MSG("Motor configurations lost. Make sure to restore them before normal operation.\r\n");
+            WARNING_MSG("Motor configurations lost. Make sure to restore them before \
+normal operation. You may have to reboot.\r\nYou should use the ROVIM T2D stop motors instead.\r\n");
             #endif //DALF_ROVIM_T2D
             //fall through
         default:
@@ -269,7 +283,7 @@ void LockCriticalResourcesAccess(void)
 {
     /*given which and how GPIOs are currently used, they do not need special protection. If needed
     in the future, it should be added.*/
-    CriticalResourcesToLock=TRUE;
+    ResourcesLockFlag=TRUE;
     #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_LockCriticalResourcesAccess();
     #endif
@@ -278,7 +292,7 @@ void LockCriticalResourcesAccess(void)
 
 void UnlockCriticalResourcesAccess(void)
 {
-    CriticalResourcesToLock=FALSE;
+    ResourcesLockFlag=FALSE;
     #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_UnlockCriticalResourcesAccess();
     #endif
@@ -289,7 +303,7 @@ BOOL IsStandardCommandLocked(BYTE cmd)
 {
     BYTE i;
     
-    if(!CriticalResourcesToLock)
+    if(!ResourcesLockFlag)
     {
         return FALSE;
     }
@@ -298,10 +312,11 @@ BOOL IsStandardCommandLocked(BYTE cmd)
     {
         if( cmd==StandardCommandsToAllow[i])
         {
+            DEBUG_MSG("Found cmd=%d is in whitelist position %d.\r\n", cmd, i);
             return FALSE;
         }
     }
-    DEBUG_MSG("Command is locked.\r\n");
+    ERROR_MSG("Command is locked.\r\n");
     return TRUE;
 }
 
@@ -309,31 +324,28 @@ BOOL IsExtendedCommandLocked(BYTE cmd)
 {
     BYTE i;
     
-    if(!CriticalResourcesToLock)
+    if(!ResourcesLockFlag)
     {
         return FALSE;
     }
-    if (cmd > CUSTOM_CMD_ID_OFFSET)
+    if (cmd >= CUSTOM_CMD_ID_OFFSET)
     {
         //command does not exist in extended command set. nExtendedCommandsToLock[] is incorrect
-        return TRUE;
+        DEBUG_MSG("Command does not belong to dalf extended set.\r\n");
+        return FALSE;
     }
     
     for(i=0;i<nExtendedCommandsToAllow;i++)
     {
         if( cmd==ExtendedCommandsToAllow[i])
         {
+            DEBUG_MSG("Found cmd=%d is in whitelist position %d.\r\n", cmd, i);
             return FALSE;
         }
     }
     DEBUG_MSG("Command is locked.\r\n");
     return TRUE;
 }
-
-/*void ScheduleTask(ROVIM_T2D_ConcludeLockdown,5500,FALSE);
-{
-    
-}*/
 
 // GPIO sub-driver ---------------------------------------------------------------------------------
 /*Remark: Due to the nature of this application, where all possible GPIOs are known beforehand, 
@@ -568,9 +580,7 @@ static BOOL GetGPIOConfigbyName(const rom char* name, IOPinConfig* config)
     return FALSE;
 }
 
-//XXX: Should not be able to set, reset and toggle a GPIO configured as input,
-//yet, I may want to get the value os a GPIO configured as output.
-//XXX:"Rule of thumb: Always read inputs from PORTx and write outputs to LATx. If you need to read what you set an output to, read LATx."
+//"Rule of thumb: Always read inputs from PORTx and write outputs to LATx. If you need to read what you set an output to, read LATx."
 BOOL SetGPIO(const rom char* name)
 {
     BYTE i=0;
@@ -834,29 +844,3 @@ BOOL GetAllGPIO(BYTE* J5A, BYTE* J5B, BYTE* J6A, BYTE* J6B)
     
     return TRUE;
 }
-
-//--------------------------------------------------------------------------------------------------
-//-------------------------------------Unused section-----------------------------------------------
-//--------------------------------------------------------------------------------------------------
-
-/*TODO: remove
-BYTE SetExternalAppSupportFcts(greeting GreetingFctPtr, cmdExtensionDispatch
-    CmdExtensionDispatchFctPtr, serviceIO ServiceIOFctPtr)
-{
-    if( (GreetingFctPtr == NULL) || (CmdExtensionDispatchFctPtr == NULL) || (ServiceIOFctPtr == NULL))
-    {
-        ERROR_MSG("Trying to register a NULL function.\r\n");
-        return eParmErr;
-    }
-
-    ExternalFcts.GreetingFct = GreetingFctPtr;
-    ExternalFcts.CmdExtensionDispatchFct = CmdExtensionDispatchFctPtr;
-    ExternalFcts.ServiceIOFct = ServiceIOFctPtr;
-
-    return NoErr;
-}
-
-ExternalAppSupportFcts* GetExternalAppSupportFcts(void)
-{
-    return &ExternalFcts;
-}*/

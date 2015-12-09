@@ -16,16 +16,15 @@
 // ********************************
 // *** Set configuration bits  ****
 // ********************************
-
 //#pragma config	OSC = INTIO7		// Internal Osc, OSC2=ClockOut, OSC1=RA7
 #pragma	config	OSC = EC			// External Oscillator.  OSC2 is Clock Out.
 #pragma config	FCMEN = OFF			// Fail-Safe Clock Monitor disabled.
 #pragma config	IESO = OFF			// Int/Ext Osc Switchover disabled.
 #pragma	config	PWRT = ON			// Powerup Timer On.
 #pragma	config	BOREN = OFF			// Brown out reset Off
-#pragma	config	BORV = 0		// Brown out reset voltage 4.5V
-#pragma	config	WDT = OFF			// Watch Dog disabled
-#pragma	config	WDTPS = 1			// Watch Dog Post Scale 1:1
+#pragma	config	BORV = 0     		// Brown out reset voltage 4.5V
+#pragma	config	WDT = OFF			// Watch Dog disabled - it will be activated at run time via InitWatchdog()
+#pragma	config	WDTPS = 256   	    // Watch Dog timeout= WDTPS * 4 ms
 #pragma	config	MCLRE = ON			// MCLR# enabled.
 #pragma	config	LPT1OSC = OFF		// Low Power Timer1 Operation disabled.
 #pragma	config	CCP2MX = PORTE		// CCP2 on RE7
