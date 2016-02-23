@@ -44,10 +44,10 @@ void ROVIM_T2D_MonitorTractionWarning(BYTE period);
 void ROVIM_T2D_MonitorBrakingWarning(BYTE period);
 void ROVIM_T2D_MonitorDirectionWarning(BYTE period);
 BOOL ROVIM_T2D_DetectFatalError(WORD period);
-void ROVIM_T2D_MonitorBrakeUnlock(WORD period);
+BOOL ROVIM_T2D_DetectBrakeUnlock(WORD period);
 void ROVIM_T2D_LockUnusedResourcesAccess(void);
 void ROVIM_T2D_ConfigSerialPort(void);
-void ROVIM_T2D_UpdateVel1Acc1(void);
+void ROVIM_T2D_UpdateVelocity1(void);
 void ROVIM_T2D_ConfigDefaultParamBlock(void);
 void ROVIM_T2D_ConfigDirParamBlock(void);
 void ROVIM_T2D_LockCriticalResourcesAccess(void);
@@ -57,6 +57,10 @@ void ROVIM_T2D_MonitorManualMode(BYTE period);
 void ROVIM_T2D_PendingCmd(BYTE period);
 void ROVIM_T2D_FullBrake(void);
 void ROVIM_T2D_SetSpeed(BYTE speed);
+BYTE ROVIM_T2D_SoftStop(void);
+BYTE ROVIM_T2D_LightPWMLed(BYTE dutyCycle, BYTE direction);
+void ROVIM_T2D_DetectSigmaDError(BYTE period);
+void    ROVIM_T2D_ServiceLED(void);
 
 //functions accessible from the command line
 BYTE ROVIM_T2D_CmdDispatch(void);
@@ -73,6 +77,11 @@ extern WORD    ROVIM_T2D_sysmonitorcount;            // ROVIM T2D system state m
 extern WORD    ROVIM_T2D_pwmrefreshcount;            // ROVIM T2D PWM refresh timeout counter;
 extern BOOL    ManualSysMonitoring;
 
+extern BOOL inLockdown;
+extern BOOL autoMode;
+extern BOOL SigmaDError;
+extern BYTE movementType;
+
 extern long vel2;
 extern long acc1;
 extern long vel1;
@@ -86,15 +95,21 @@ typedef struct{
 //command codes
 #define ROVIM_T2D_LOCKDOWN_CMD_CODE         (CUSTOM_CMD_ID_OFFSET)
 #define ROVIM_T2D_RELEASE_CMD_CODE          (CUSTOM_CMD_ID_OFFSET+1)
-#define ROVIM_T2D_CONTROL_GPIO_CMD_CODE     (CUSTOM_CMD_ID_OFFSET+2)
-#define ROVIM_T2D_ACCELERATE_CMD_CODE       (CUSTOM_CMD_ID_OFFSET+3)
-#define ROVIM_T2D_DECELERATE_CMD_CODE       (CUSTOM_CMD_ID_OFFSET+4)
-#define ROVIM_T2D_SET_MOVEMENT_CMD_CODE     (CUSTOM_CMD_ID_OFFSET+5)
-#define ROVIM_T2D_TURN_CMD_CODE             (CUSTOM_CMD_ID_OFFSET+6)
-#define ROVIM_T2D_DEBUG_CTRL_CMD_CODE       (CUSTOM_CMD_ID_OFFSET+7)
+#define ROVIM_T2D_SOFTSTOP_CMD_CODE         (CUSTOM_CMD_ID_OFFSET+2)
+#define ROVIM_T2D_CONTROL_GPIO_CMD_CODE     (CUSTOM_CMD_ID_OFFSET+3)
+#define ROVIM_T2D_ACCELERATE_CMD_CODE       (CUSTOM_CMD_ID_OFFSET+4)
+#define ROVIM_T2D_DECELERATE_CMD_CODE       (CUSTOM_CMD_ID_OFFSET+5)
+#define ROVIM_T2D_SET_MOVEMENT_CMD_CODE     (CUSTOM_CMD_ID_OFFSET+6)
+#define ROVIM_T2D_TURN_CMD_CODE             (CUSTOM_CMD_ID_OFFSET+7)
+#define ROVIM_T2D_DEBUG_CTRL_CMD_CODE       (CUSTOM_CMD_ID_OFFSET+8)
 
+#define SigmaDLed ADC0[4]
+#define DirPos    ADC0[3]
+/*time it takes for Sigma Drive external error led to be off to assume the error is cleared.
+When there is an error, the controller blinks the error code, then pauses for about 2s before repeating*/
+#define ROVIM_T2D_SIGMAD_ERROR_TIMEOUT 2000
 //digital filter cut-off frequency parameter
-#define ROVIM_T2D_DECAY 0x91    //fc=~20Hz
+#define ROVIM_T2D_DECAY 0x80    //fc=~25Hz
 #define ROVIM_T2D_FENBL 0x54
 //voltage threshold to produce a warning in dalf firmware
 #define ROVIM_T2D_VBWARN 12000
@@ -108,21 +123,22 @@ typedef struct{
 //traction PWM signal refresh period, in ms
 #define ROVIM_T2D_PWM_REFRESH_PERIOD 1
 //maximum speed the user can order the vehicle to move, in Km/h/10
-#define ROVIM_T2D_MAX_SPEED 80
+#define ROVIM_T2D_MAX_SPEED 45
 //maximum speed the vehicle can achieve at any point in time, in Km/h/10
 #define ROVIM_T2D_CRITICAL_SPEED ( ((long) ROVIM_T2D_MAX_SPEED)*12/10 )
 //minimum speed of the vehicle, in Km/h/10
-/*minimum speed should be !=0. To have a closed loop trying to follow a too smal reference, may
-cause stability problems (I think!). 0.2 km/h is a very slow speed and easy achievable by the 
-system. It takes ~10% duty cycle to achieve, which seems a reasonable starting point.*/
-#define ROVIM_T2D_LOWER_SPEED_LIMIT 2
-//number of encoder gear teeth
-#define ROVIM_T2D_TRACTION_TPR 11
+/*minimum speed should be !=0. The encoder is just not sensible enough bellow these speeds*/
+#define ROVIM_T2D_LOWER_SPEED_LIMIT 5
+//number of ticks per rev (not the #teeth of the gear where 
+//the encoder is mounted, but of the gear that revs at the same speed as the wheels)
+#define ROVIM_T2D_TRACTION_TPR 39
 //Average perimeter of the real wheel (depends on tire tread, load and tire pressure), in cm*/
 #define ROVIM_T2D_WHEEL_PERIMETER 176
 //sincronize this period with VSP for traction encoder
 #define ROVIM_T2D_VSP1 250  //ms
 #define ROVIM_T2D_SYSTEM_MONITOR_PERIOD   1000//ms
+
+#define ROVIM_T2D_VEL1_CALC_MIN_TICK_CNT 5
 
 
 #define WATCHDOG_PERIOD 0x200        //512 ms
@@ -153,11 +169,11 @@ in ms*/
 //total direction safe travel, in degrees (should be an even number)
 #define ROVIM_T2D_DIR_ANGULAR_RANGE 86  //total direction travel~90º
 //upper tick count (potentiometer value) that the direction can safely reach
-#define ROVIM_T2D_DIR_TICK_UPPER_LIMIT 0xC0 //touches the end-of-travel at 0xCA
+#define ROVIM_T2D_DIR_TICK_UPPER_LIMIT 0xB8 //touches the end-of-travel at 0xC8
 //lower tick count (potentiometer value) that the direction can safely reach
-#define ROVIM_T2D_DIR_TICK_LOWER_LIMIT 0x1B //touches the end-of-travel at 0x11
+#define ROVIM_T2D_DIR_TICK_LOWER_LIMIT 0x23 //touches the end-of-travel at 0x13
 //tick count corresponding to direction mid-course (straight line movement). Used because tick slack isn't equal for each side of rotation
-#define ROVIM_T2D_DIR_CENTER_TICK_CNT 0x88
+#define ROVIM_T2D_DIR_CENTER_TICK_CNT 0x6D
 //direction motor mode1 flags. See dalf owners manual
 #define ROVIM_T2D_DIR_MODE1 0x32
 //direction motor mode2 flags. See dalf owners manual
@@ -167,7 +183,7 @@ in ms*/
 //velocity sampling period for direction motor
 #define ROVIM_T2D_DIR_VSP 20
 //minimum PWM duty cycle for direction control
-#define ROVIM_T2D_DIR_MIN_PWM 20
+#define ROVIM_T2D_DIR_MIN_PWM 30
 //maximum PWM duty cycle for direction control
 #define ROVIM_T2D_DIR_MAX_PWM 100
 //maximum analog error -  not important in this application

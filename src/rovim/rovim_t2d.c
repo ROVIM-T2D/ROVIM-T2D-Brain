@@ -1,4 +1,4 @@
-//#line 1 "rovim_t2d.c"         //work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+#line 1 "rovim_t2d.c"         //work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
 //cannot set breakpoints if this directive is used:
 //info: http://www.microchip.com/forums/m105540-print.aspx
 //uncomment only when breakpoints are no longer needed
@@ -79,7 +79,8 @@ needed.*/
     /*detects an emergency stop condition, regarless of the source. Logic '1' indicates the switch 
 is pressed and the brake is trying to clamp.*/
     { "emergency stop condition",       { J5,    14,     IN,     OFF,   OFF }},
-    /*Unused*/
+    /*controls traction controller handbrake feature. Logic '1' means the handbrake is engaged and
+the vehicle will hold its position.*/
     { "engage handbrake",               { J5,    15,     OUT,    OFF,   OFF }},
     /*Unused*/
     { "",                               { J5,    16,     IN,     OFF,   OFF }},
@@ -92,6 +93,8 @@ static BOOL ResourcesLockFlag=FALSE;
 static const BYTE ROVIM_T2D_CommandsToAllow[]={
     ROVIM_T2D_LOCKDOWN_CMD_CODE,
     ROVIM_T2D_RELEASE_CMD_CODE,
+    ROVIM_T2D_SOFTSTOP_CMD_CODE,
+    ROVIM_T2D_ACCELERATE_CMD_CODE,
     ROVIM_T2D_DECELERATE_CMD_CODE,
     ROVIM_T2D_SET_MOVEMENT_CMD_CODE,
     ROVIM_T2D_DEBUG_CTRL_CMD_CODE
@@ -100,8 +103,7 @@ static const BYTE ROVIM_T2D_nCommandsToAllow=(BYTE) (sizeof(ROVIM_T2D_CommandsTo
 
 WORD    ROVIM_T2D_sysmonitorcount;            // ROVIM T2D system state monitoring timeout counter;
 WORD    ROVIM_T2D_pwmrefreshcount;            // ROVIM T2D PWM refresh timeout counter;
-//XXX: Change this when running normal
-BOOL    ManualSysMonitoring=TRUE;
+BOOL    ManualSysMonitoring=FALSE;
 BYTE    DebugPWM=0;
 
 //The pointer to easily switch configurations
@@ -114,17 +116,31 @@ static BYTE DccDutyCycle=0;
 static unsigned int WaitForAccDccDecay=0;
 static BYTE PeriodCnt=0;
 
+static BOOL ResetPrintFlags=FALSE;
+
 //Brake locl/unlock flags
-static BOOL inLockdown=FALSE;
 static BOOL UnlockingBrake=FALSE;
+BOOL inLockdown=FALSE;
+BOOL autoMode=FALSE;
+BOOL SigmaDError=FALSE;
 static WORD MotorStressMonitor[3]={0,0,0};
 
 //vehicle movement description
 static long settlingTime=0;
 static movement desiredMovement={0};
-static BYTE movementType=HILLHOLD;
-long acc1=0,vel1=0;
+BYTE movementType=HILLHOLD;
+long /*acc1=0,*/vel1=0;
+BOOL ForcePrintMsg=FALSE;
 
+#if 0
+static const BYTE SpeedToDutyCycleNoLoadLUTSigmaDConf1[50]=
+/*Speed (Km/10/h):*/
+/*duty cycle (%):*/{0,};
+static const BYTE *SpeedToDutyCycle;
+static const BYTE SpeedToDutyCycleLen=0;
+#endif
+static BYTE SpeedDCScaling=12;  //equals to 1
+    
 //configure basic ROVIM features needed early on. To be called as soon as possible
 void ROVIM_T2D_Init(void)
 {
@@ -142,7 +158,7 @@ void ROVIM_T2D_Init(void)
 
 void ROVIM_T2D_LockUnusedResourcesAccess(void)
 {
-    ERROR_MSG("LockUnusedResourcesAccess not implemented.\r\n");
+    ERROR_MSG("LockUnusedResourcesAccess not implemented. Don't worry about it.\r\n");
 }
 
 void ROVIM_T2D_ConfigSerialPort(void)
@@ -212,6 +228,24 @@ void ROVIM_T2D_ConfigDefaultParamBlock(void)
     ARG[2]=0x2A;
     ARG[3]=(BYTE) (ROVIM_T2D_VBWARN & 0xFF);
     TeCmdDispatchExt();
+    
+    /*//XXX: temp.
+    WARNING_MSG("For debug purposes, setting VBWARN to a low value. Remove when you're finished debugging\r\n");
+    CMD='W';
+    ARGN=4;
+    ARG[0]=1;
+    ARG[1]=01;
+    ARG[2]=0x29;
+    ARG[3]=0;
+    TeCmdDispatchExt();
+    //set VBWARN MSB
+    CMD='W';
+    ARGN=4;
+    ARG[0]=1;
+    ARG[1]=01;
+    ARG[2]=0x2A;
+    ARG[3]=0;
+    TeCmdDispatchExt();*/
 }
 
 void ROVIM_T2D_ConfigDirParamBlock(void)
@@ -439,6 +473,7 @@ void ROVIM_T2D_Greeting(void)
         Greeting();
         printf("ROVIM T2D Brain\r\n");
         printf("ROVIM T2D Software Ver:%2u.%u\r\n",ROVIM_T2D_SW_MAJOR_ID, ROVIM_T2D_SW_MINOR_ID);   // ROVIM Software ID
+        printf("ROVIM T2D Release date: "ROVIM_T2D_RELEASE_DATE"\r\n");                              // ROVIM Software release date
         printf("ROVIM T2D Contact(s):\r\n"ROVIM_T2D_CONTACTS"\r\n");                                // ROVIM Contacts
         printf("\r\n");
     }
@@ -450,12 +485,15 @@ BYTE ROVIM_T2D_CmdDispatch(void)
     {
         return eDisable;
     }
+    ResetPrintFlags=TRUE;
     switch(ARG[0])
     {
         case ROVIM_T2D_LOCKDOWN_CMD_CODE:
             return ROVIM_T2D_Lockdown();
         case ROVIM_T2D_RELEASE_CMD_CODE:
             return ROVIM_T2D_ReleaseFromLockdown();
+        case ROVIM_T2D_SOFTSTOP_CMD_CODE:
+            return ROVIM_T2D_SoftStop();
         case ROVIM_T2D_CONTROL_GPIO_CMD_CODE:
             return ROVIM_T2D_ControlGPIO();
         case ROVIM_T2D_ACCELERATE_CMD_CODE:
@@ -473,6 +511,7 @@ BYTE ROVIM_T2D_CmdDispatch(void)
             ERROR_MSG("Command does not exist.\r\n");
             return eParseErr;
     }
+    ResetPrintFlags=FALSE;
     ERROR_MSG("Unexpected program execution.\r\n");
     return eDisable;
 }
@@ -514,11 +553,11 @@ BOOL ROVIM_T2D_FinishReleaseFromLockdown(void)
 {
     UnlockCriticalResourcesAccess();
     //ROVIM_T2D_ConfigDefaultParamBlock(); //see if with soft stop this isn't needed
-    _LED3_OFF;
     ResetGPIO("brake unclamper");
     inLockdown=FALSE;
+    LedErr &= ~Lckmsk;
     STATUS_MSG("ROVIM is now ready to move. Restart traction controller to clear any remaining \
-    error\r\n");
+error\r\n");
     
     return TRUE;
 }
@@ -553,6 +592,8 @@ BOOL ROVIM_T2D_ValidateState(void)
     TIME now;
     //Since the system always goes to lockdown on power up, this initial value is accurate enough
     static TIME before={0};
+    TIME EmergencyConditionTestStart;
+
     
     /*I'm choosing not to monitor the brake clamp & unclamp & unclamp command here because:
     the user may start unclamping before sending the command; while unclamping, there is nothing 
@@ -579,9 +620,7 @@ BOOL ROVIM_T2D_ValidateState(void)
         return FALSE;
     }
     
-    /*Get the brake clamper GPIO. Since it depends on the emergency stop condition being ON (as
-    happens during lockdown) and it's pin is connected to a monostable circuit, we need to wait
-    until the monostable brings the value down before we can get a clean reading*/
+    /*Make sure the brake clamper GPIO is off before testing the emergency stop condition*/
     GetTime(&now);
     delay=CalculateDelayMs(&before, &now);
     if(ROVIM_T2D_BRAKE_CLAMP_TIME > delay)
@@ -592,7 +631,13 @@ time you call this command. Wait %d ms before trying again.\r\n",
         DEBUG_MSG("delay=%d,timeout=%d.\r\n",delay, ROVIM_T2D_BRAKE_CLAMP_TIME);
         return FALSE;
     }
+    /*So, the software is too fast to bring down the brake clamper output and test the emergency condition
+    input sequentially. So we must wait for the output to go down. We do that with some busy waiting.
+    Because life's long enough to do some busy waiting */
+    GetTime(&before);
     ResetGPIO("brake clamper");
+    SetDelay(&before, 0,msec_100);
+    while(!Timeout(&before));
     GetGPIO("emergency stop condition",&emergencyStop);
     /*We shouldn't decide here to release the brake, so we just put it back and start counting for the next time*/
     SetGPIO("brake clamper");
@@ -610,7 +655,8 @@ time you call this command. Wait %d ms before trying again.\r\n",
     SoftStop(3);
 
     DEBUG_MSG("Vehicle is ready to be unclamped.\r\n");
-    return TRUE;    //the vehicle is good to go
+    
+    return TRUE;
 }
 
 
@@ -619,6 +665,7 @@ void ROVIM_T2D_MonitorSystem(void)
 {
     BYTE previousVerbosity=0;
     BYTE error=0;
+    BOOL finishUnlocking=FALSE;
     
     TIME start={0}, stop={0};
     static TIME prev={0};
@@ -629,21 +676,14 @@ void ROVIM_T2D_MonitorSystem(void)
     previousVerbosity = GetVerbosity();
     if (!ManualSysMonitoring)   //in manual mode we do not need to restrict verbosity
     {
+        /*We only want to let pass warning and errors. Status*/
         SetVerbosity(VERBOSITY_LEVEL_ERROR | VERBOSITY_LEVEL_WARNING);
     }
     
     //Look for unrecoverable error conditions
     if( ROVIM_T2D_DetectFatalError(ROVIM_T2D_SYSTEM_MONITOR_PERIOD))
     {
-        //XXX:What should we do on a fatal error?
-        #ifdef WATCHDOG_ENABLED
-        HardReset();
-        #else //WATCHDOG_ENABLED
-        //Soft reset
-        CMD='I';
-        ARGN=0;
-        TeCmdDispatchExt();
-        #endif //WATCHDOG_ENABLED
+        Reset();
     }
     
     //Look for severe error conditions
@@ -664,11 +704,14 @@ void ROVIM_T2D_MonitorSystem(void)
     ROVIM_T2D_MonitorBrakingWarning(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
     ROVIM_T2D_MonitorDirectionWarning(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
     
+    //ROVIM_T2D_MonitorEmergencyConditionInspection(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
     //look for and act on brake unlock completion
-    ROVIM_T2D_MonitorBrakeUnlock(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
+    finishUnlocking=ROVIM_T2D_DetectBrakeUnlock(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
 
     //Detect and act on assynchronous switch to manual mode
     ROVIM_T2D_MonitorManualMode(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
+    
+    ROVIM_T2D_DetectSigmaDError(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
     
     ROVIM_T2D_PendingCmd(ROVIM_T2D_SYSTEM_MONITOR_PERIOD);
     
@@ -676,6 +719,15 @@ void ROVIM_T2D_MonitorSystem(void)
     {
         SetVerbosity(previousVerbosity);
     }
+    
+    if(finishUnlocking)
+    {
+        //finished unlocking brake inside the safety timeout
+        ROVIM_T2D_FinishReleaseFromLockdown();
+        UnlockingBrake=FALSE;
+    }
+    
+    if(ForcePrintMsg) ForcePrintMsg=FALSE;
     
     //time measurements - debug purposes
     GetTime(&stop);
@@ -705,21 +757,6 @@ void ROVIM_T2D_MonitorSystem(void)
     //////////////////////////////////////////////////////////////////////
 void ROVIM_T2D_PendingCmd(BYTE period)
 {
-    BYTE dutyCycle=0;
-    
-    /* XXX:i don't think this is needed here- to test
-    if ( (desiredMovement.type==HILLHOLD) && (!vel1)  && (movementType!=HILLHOLD) )
-    {
-        //engage hill holder when vehicle is set on hold and has reached a standstill. Do it only once
-        ResetGPIO("engage handbrake");
-        SetGPIO("engage forward");
-        SetGPIO("engage reverse");
-        SetGPIO("activate traction");
-        movementType=HILLHOLD;
-        STATUS_MSG("Vehicle on hold.\r\n");
-    }
-    */
-    
     if ( (desiredMovement.type==FORWARD) && (!vel1)  && (movementType!=FORWARD) )
     {
         //pins are active low. Order of activation is important here.
@@ -744,40 +781,88 @@ void ROVIM_T2D_PendingCmd(BYTE period)
         STATUS_MSG("Vehicle moving backwards at approximately %d km/h/10.\r\n",desiredMovement.speed);
     }
     DEBUG_MSG("desired type=%d, speed=%d, current type=%d, vel1=%ld, FW=%d,RV=%d.\r\n",
-        desiredMovement.type, desiredMovement.speed, movementType, vel1, FORWARD,REVERSE);
+    desiredMovement.type, desiredMovement.speed, movementType, vel1, FORWARD,REVERSE);
     //neutral mode can be done immediately. There's no need to wait until the vehicle stops.
+}
+
+void ROVIM_T2D_DetectSigmaDError(BYTE period)
+{
+    static long ledOffTime=0;
+    static BOOL printMsg=TRUE;
+    WORD led=0;
+    
+    
+    if(ForcePrintMsg) printMsg=TRUE;
+    
+    led=AdcConvert((WORD)SigmaDLed);
+    
+    /*FYI: Led Off: V ~=4900 mV; Led ON: V~=2300 mV.*/
+    if(led > 4500) //this threshold != 5V is to avoid false positives (we are reading analogue)
+    {
+        ledOffTime+=(long)period;
+    }
+    else
+    {
+        ledOffTime=0;
+        SigmaDError=TRUE;
+        if(printMsg)
+        {
+            WARNING_MSG("The SigmaDrive traction controller either is turned off or has encountered an error.\r\n");
+            printMsg=FALSE;
+        }
+    }
+    
+    if(ledOffTime >= (long)ROVIM_T2D_SIGMAD_ERROR_TIMEOUT)
+    {
+        SigmaDError=FALSE;
+        printMsg=TRUE;
+    }
 }
 
 void ROVIM_T2D_MonitorManualMode(BYTE period)
 {
-    static BOOL manualMode=FALSE;
     BYTE autoSwitch=0;
+    BYTE dcc=0, acc=0, fw=0, rv=0, handbrake=0;
     
     GetGPIO("auto mode switch",&autoSwitch);
+    GetGPIO("decelerator",&dcc);
+    GetGPIO("accelerator",&acc);
+    GetGPIO("engage forward",&fw);
+    GetGPIO("engage reverse",&rv);
+    GetGPIO("engage handbrake",&handbrake);
     
-    if((!autoSwitch) && (!manualMode))
+    if(!autoSwitch)
     {
-        //Make sure the outputs are in a good state
-        DEBUG_MSG("Detected manual mode of operation.\r\n");
-        manualMode=TRUE;
-        SoftStop(2);
-        SoftStop(3);
-    }
-    if (autoSwitch) 
-    {
-        if(manualMode)
+        /*Make sure the outputs are in a good state. If we don't do this, the vehicle may start 
+        moving unexpectedly when the user switches to auto mode. We must keep monitoring these 
+        variables because we must assume the user is stupid and will try to send commands while 
+        on manual mode, and we have no interrupt associated with this pin.*/
+        if(Power2)
         {
-            DEBUG_MSG("Detected automatic mode of operation.\r\n");
+            WARNING_MSG("Detected incoherent direction outputs because of manual mode. Resetting them.\r\n");
+            SoftStop(2);
         }
-        manualMode=FALSE;
+        if((dcc) || (acc) || (!fw) || (!rv) || (!handbrake))
+        {
+            WARNING_MSG("Detected incoherent traction outputs because of manual mode. Resetting them.\r\n");
+            SoftStop(3);
+        }
+        autoMode=FALSE;
     }
-    
+    else
+    {
+        autoMode=TRUE;
+        DEBUG_MSG("Detected automatic mode of operation.\r\n");
+    }
 }
 
 //detects when traction system has encountered a serious error. It is in a Not OK state
 BOOL ROVIM_T2D_DetectTractionEror(BYTE period)
 {
     static WORD movingOnHoldTimeout=0;
+    static BOOL printMsg=TRUE;
+    
+    if(ForcePrintMsg) printMsg=TRUE;
     
     /*XXX: Not ready yet. Must be done only with closed loop speed control
     if ((desiredMovement.speed < vel1) && (settlingTime > ROVIM_T2D_MAX_SETTLING_TIME))
@@ -788,17 +873,26 @@ BOOL ROVIM_T2D_DetectTractionEror(BYTE period)
     }*/
     if (vel1 > ROVIM_T2D_CRITICAL_SPEED)
     {
-        ERROR_MSG("Vehicle is moving too fast.\r\n");
+        if(printMsg)
+        {
+            ERROR_MSG("Vehicle is moving too fast.\r\n");
+            printMsg=FALSE;
+        }
         DEBUG_MSG("vel=%ld, max speed=%ld.\r\n", vel1, ROVIM_T2D_CRITICAL_SPEED);
         return TRUE;
     }
+    /* We cannot get accurate enough acceleration readings from the speed encoder we have and it's current mounting to do this check
     if ((abs(acc1)) > ROVIM_T2D_CRASH_ACC_THRESHOLD)
     {
-        ERROR_MSG("Vehicle is accelerating too fast.\r\n");
+        if(printMsg)
+        {
+            ERROR_MSG("Vehicle is accelerating too fast.\r\n");
+            printMsg=FALSE;
+        }
         DEBUG_MSG("acc=%ld, max acc=%d.\r\n", acc1, ROVIM_T2D_CRASH_ACC_THRESHOLD);
         return TRUE;
-    }
-    if ((desiredMovement.type==HILLHOLD) && (vel1))
+    }*/
+    if ((desiredMovement.type==HILLHOLD) && (vel1) && (autoMode))
     {
         movingOnHoldTimeout+=period;
     }
@@ -808,11 +902,16 @@ BOOL ROVIM_T2D_DetectTractionEror(BYTE period)
     }
     if (movingOnHoldTimeout>ROVIM_T2D_MOVING_ON_HOLD_TIMEOUT)
     {
-        ERROR_MSG("Vehicle should be on hold, yet it is moving.\r\n");
+        if(printMsg)
+        {
+            ERROR_MSG("Vehicle should be on hold, yet it is moving.\r\n");
+            printMsg=FALSE;
+        }
         DEBUG_MSG("movement type=%d, vel=%ld, timeout=%d.\r\n", desiredMovement.type, vel1, ROVIM_T2D_MOVING_ON_HOLD_TIMEOUT);
         return TRUE;
     }
 
+    printMsg=TRUE;
     DEBUG_MSG("No traction errors detected.\r\n");
     return FALSE;
 }
@@ -822,26 +921,38 @@ BOOL ROVIM_T2D_DetectBrakingError(BYTE period)
 {
     BYTE endOfTravelClamp=0, endOfTravelUnclamp=0, unclampAction=0;
     BYTE emergencyStop=0;
+    static BOOL printMsg=TRUE;
+    
+    if(ForcePrintMsg) printMsg=TRUE;
     
     GetGPIO("brake clamp switch",&endOfTravelClamp);
     GetGPIO("brake unclamp switch",&endOfTravelUnclamp);
     GetGPIO("emergency stop condition",&emergencyStop);
     GetGPIO("brake unclamper",&unclampAction);
     
-    if(emergencyStop)
+    if((emergencyStop) && (!UnlockingBrake))
     {
         //detected emergency condition - Error!
-        ERROR_MSG("There is an emergency stop condition.\r\n");
+        if(printMsg)
+        {
+            ERROR_MSG("There is an emergency stop condition.\r\n");
+            printMsg=FALSE;
+        }
         DEBUG_MSG("emergency command=%d. Remember this will occur while you have the 'brake clamper' ON.\r\n", emergencyStop);
         return TRUE;
     }
     if((!endOfTravelClamp) && (!endOfTravelUnclamp) && (!unclampAction))
     {
-        ERROR_MSG("Brake is neither locked nor unlocked.\r\n");
+        if(printMsg)
+        {
+            ERROR_MSG("Emergency brake is neither locked nor unlocked.\r\n");
+            printMsg=FALSE;
+        }
         DEBUG_MSG("clamp end-of-travel=%d, unclamp end-of-travel=%d, unclamping=%d.\r\n",endOfTravelClamp, endOfTravelUnclamp,unclampAction);
         return TRUE;
     }
     
+    printMsg=TRUE;
     DEBUG_MSG("No braking errors detected.\r\n");
     return FALSE;
 }
@@ -850,10 +961,13 @@ BOOL ROVIM_T2D_DetectBrakingError(BYTE period)
 BOOL ROVIM_T2D_DetectDirectionEror(BYTE period)
 {
     BYTE endOfTravel=0;
+    static BOOL printMsg=TRUE;
 
+    if(ForcePrintMsg) printMsg=TRUE;
+    
     /* This check only makes sense if we can cut power to the direction motor when going to lockdown.
     Currently we can't do so, so this stays commented.
-    pos=ADC0[3];
+    pos=DirPos;
     if ((pos > ROVIM_T2D_DIRECTION_CRITICAL_UPPER_POSITION) || 
         (pos < ROVIM_T2D_DIRECTION_CRITICAL_LOWER_POSITION))
     {
@@ -864,12 +978,19 @@ BOOL ROVIM_T2D_DetectDirectionEror(BYTE period)
     GetGPIO("direction error switch",&endOfTravel);
     if (endOfTravel)
     {
+        /*This should only be relevant in auto mode, but since this condition is hardwired to 
+        force the vehicle to go to lockdown, we let the software follow along*/
         //reached hard direction position limit - Error!
-        ERROR_MSG("Direction has reached one end-of-travel switch.\r\n");
+        if(printMsg)
+        {
+            ERROR_MSG("Direction has reached one end-of-travel switch.\r\n");
+            printMsg=FALSE;
+        }
         DEBUG_MSG("Switch=%d.\r\n", endOfTravel);
         return TRUE;
     }
     
+    printMsg=TRUE;
     DEBUG_MSG("No direction errors detected.\r\n");
     return FALSE;
 }
@@ -924,11 +1045,11 @@ BOOL ROVIM_T2D_DetectFatalError(WORD period)
     BYTE endOfTravelClamp=0;
     BYTE emergencyStop=0;
     
+    /*TODO:
     GetGPIO("brake clamp switch",&endOfTravelClamp);
     GetGPIO("emergency stop condition",&emergencyStop);
     GetGPIO("brake unclamp command",&unclampAction);
     
-    /*XXX: Let's ignore this for now. It is not that relevant to the quality of the software
     if(unclampAction)
     {
         unclampActionActiveTime+=period;
@@ -958,7 +1079,61 @@ bad happened.\r\n");
     return FALSE;
 }
 
-void ROVIM_T2D_MonitorBrakeUnlock(WORD period)
+#if 0
+BOOL ROVIM_T2D_MonitorEmergencyConditionInspection(WORD period)
+{
+    static WORD timeoutCount=0;
+    BYTE emergencyStop=0;
+    
+    if(!InspectingEmergencyCondition)
+    {
+        timeoutCount=0;
+        return FALSE;
+    }
+    
+    timeoutCount+=period;
+    /*Before we can test the brake clamper switch, we must make sure the emergency stop condition is off.
+    But what we really want to know is exactly that, so we test it directly instead of the switch*/
+    GetGPIO("emergency stop condition",&emergencyStop);
+    if ((!emergencyStop) && (timeoutCount <= ROVIM_T2D_TEST_EMERGENCY_CONDITION_TIMEOUT))
+    {
+        //this must be done outside this function so that the status msg gets printed
+        return TRUE;
+    }
+    if (timeoutCount > ROVIM_T2D_TEST_EMERGENCY_CONDITION_TIMEOUT)
+    {
+        //timeout expired. Going back to full lockdown
+        SetGPIO("brake clamper");
+        ResetGPIO("brake unclamper");
+        ERROR_MSG("Took too long to test for an emergency stop condition. try again\r\n");
+        DEBUG_MSG("stop condition=%d, time passed=%d > timeout=%d, inspecting emergency stop=%d.\r\n",emergencyStop, timeoutCount, ROVIM_T2D_TEST_EMERGENCY_CONDITION_TIMEOUT, InspectingEmergencyCondition);
+        InspectingEmergencyCondition=FALSE;
+    }
+    return FALSE;
+    
+    
+    
+    GetGPIO("emergency stop condition",&emergencyStop);
+    /*We shouldn't decide here to release the brake, so we just put it back and start counting for the next time*/
+    SetGPIO("brake clamper");
+    GetTime(&before);   
+    
+    if(emergencyStop)
+    {
+        ERROR_MSG("There is still an emergency stop condition active.\r\n");
+        return FALSE;
+    }
+    
+    DEBUG_MSG("Inputs are good. Make sure outputs are, too.\r\n");
+    //Stop motors
+    SoftStop(2);
+    SoftStop(3);
+
+    DEBUG_MSG("Vehicle is ready to be unclamped.\r\n");
+}
+#endif
+
+BOOL ROVIM_T2D_DetectBrakeUnlock(WORD period)
 {
     static WORD timeoutCount=0;
     BYTE endOfTravelUnclamp=0;
@@ -966,16 +1141,15 @@ void ROVIM_T2D_MonitorBrakeUnlock(WORD period)
     if(!UnlockingBrake)
     {
         timeoutCount=0;
-        return;
+        return FALSE;
     }
     
     timeoutCount+=period;
     GetGPIO("brake unclamp switch",&endOfTravelUnclamp);
     if ((endOfTravelUnclamp) && (timeoutCount <= ROVIM_T2D_BRAKE_UNLOCK_TIMEOUT))
     {
-        //finished unlocking brake inside the safety timeout
-        ROVIM_T2D_FinishReleaseFromLockdown();
-        UnlockingBrake=FALSE;
+        //this must be done outside this function so that the status msg gets printed
+        return TRUE;
     }
     if (timeoutCount > ROVIM_T2D_BRAKE_UNLOCK_TIMEOUT)
     {
@@ -986,7 +1160,7 @@ void ROVIM_T2D_MonitorBrakeUnlock(WORD period)
         DEBUG_MSG("brake unlock end-of-travel=%d, time passed=%d > timeout=%d, unlocking=%d.\r\n",endOfTravelUnclamp, timeoutCount, ROVIM_T2D_BRAKE_UNLOCK_TIMEOUT, UnlockingBrake);
         UnlockingBrake=FALSE;
     }
-    return;
+    return FALSE;
 }
 
 
@@ -1056,6 +1230,24 @@ dccDutyCtrl, PeriodCnt, movementType, WaitForAccDccDecay, AccDutyCycle, DccDutyC
             printctrl=0xFE;
         }
         if(DebugPWM) DebugPWM--;//otherwise this if case will hang forever with no new information
+        //make sure we have the signals down
+        ResetGPIO("decelerator");
+        ResetGPIO("accelerator");
+        goto exit;
+    }
+    if(!autoMode)
+    {
+        //if(!(iDebug%4))MSG("On manual.\r\n"); //debug stuff
+        if ((DebugPWM) && (printctrl & 0x02))
+        {
+            //debug stuff
+            MSG("Vehicle on manual. type=%d.\r\n",autoMode);
+            printctrl=0xFD;
+        }
+        if(DebugPWM) DebugPWM--;//otherwise this if case will hang forever with no new information
+        //make sure we have the signals down
+        ResetGPIO("decelerator");
+        ResetGPIO("accelerator");
         goto exit;
     }
     if(WaitForAccDccDecay!=0)
@@ -1063,12 +1255,12 @@ dccDutyCtrl, PeriodCnt, movementType, WaitForAccDccDecay, AccDutyCycle, DccDutyC
         /* We should not have both signals active at the same time. We wait until the previous one
         goes to 0 (or close to it), to activate the new one*/
         //if(!(iDebug%4))MSG("Decay!=0,=%d.\r\n",WaitForAccDccDecay); //debug stuff
-        if ((DebugPWM) && (printctrl & 0x02))
+        if ((DebugPWM) && (printctrl & 0x04))
         {
             //debug stuff
             MSG("Waiting for Acc/Dcc signal to fall before rising the other. \
 WaitForAccDccDecay=%d.\r\n", WaitForAccDccDecay);
-            printctrl=0xFD;
+            printctrl=0xFB;
         }
         WaitForAccDccDecay--;
         ResetGPIO("decelerator");
@@ -1079,11 +1271,11 @@ WaitForAccDccDecay=%d.\r\n", WaitForAccDccDecay);
     if(PeriodCnt >= 100)
     {
         //if(!(iDebug%4))MSG("PeriodCnt=%d, >= 100.\r\n",PeriodCnt); //debug stuff
-        if ((DebugPWM) && (printctrl & 0x04))
+        if ((DebugPWM) && (printctrl & 0x08))
         {
             //debug stuff
             MSG("Resetting period counter. PeriodCnt=%d.\r\n",PeriodCnt);
-            printctrl=0xFB;
+            printctrl=0xF7;
             DebugPWM--;
         }
         accDutyCtrl=0;
@@ -1095,22 +1287,22 @@ WaitForAccDccDecay=%d.\r\n", WaitForAccDccDecay);
     if(AccDutyCycle <= accDutyCtrl)
     {
         //if(!(iDebug%4))MSG("AccDutyCycle<=Ctrl,Ctrl=%d,Duty=%d.\r\n",accDutyCtrl,AccDutyCycle); //debug stuff
-        if ((DebugPWM) &&(printctrl & 0x08))
+        if ((DebugPWM) &&(printctrl & 0x10))
         {
             //debug stuff
             MSG("Acc=0 now. AccDutyCycle=%d, accDutyCtrl=%d, PeriodCnt=%d.\r\n", AccDutyCycle, accDutyCtrl, PeriodCnt);
-            printctrl=0xF7;
+            printctrl=0xEF;
         }
         ResetGPIO("accelerator");
     }
     else
     {
         //if(!(iDebug%4))MSG("AccDutyCycle>Ctrl,Ctrl=%d,Duty=%d.\r\n",accDutyCtrl,AccDutyCycle); //debug stuff
-        if ((DebugPWM) && (printctrl & 0x10))
+        if ((DebugPWM) && (printctrl & 0x20))
         {
             //debug stuff
             MSG("Acc=1 now. AccDutyCycle=%d, accDutyCtrl=%d, PeriodCnt=%d.\r\n", AccDutyCycle, accDutyCtrl, PeriodCnt);
-            printctrl=0xEF;
+            printctrl=0xDF;
         }
         SetGPIO("accelerator");
         accDutyCtrl++;
@@ -1152,29 +1344,91 @@ exit:
     }
 }
 
-void ROVIM_T2D_UpdateVel1Acc1(void)
+void ROVIM_T2D_UpdateVelocity1(void)
 {
-    long temp1, temp2, velRPM, prevVel;
+    long temp1=0, temp2=0, velRPM=0;
+    long currVel=0;
+    static long n1Vel=0, n2Vel=0, n3Vel=0;
+    static long sumE1=0;
+    static long t=0;
+    short long E1=0;
+    static long diffE1=0;   //tick count during VSP. Same as V1, but V1 seems much more inaccurate, so we use this
+    static BYTE debugcnt=0, end=1; //debug stuff
+    /*static long t2=0;
+    static long sumE12=0;*/
+    
     
     UpdateVelocity1();
     
-    temp1 = (long)V1 * (long)60000;
-    temp2 = (long)VSP1 * TPR1;
-    velRPM = temp1/temp2;
-    prevVel = vel1;
-    vel1 = velRPM * ROVIM_T2D_WHEEL_PERIMETER * 60000;
-    //acc(Km/10/h/s) = dV(km/h/10) / dt(ms) * 1000(ms/s)
-    temp1 = (vel1-prevVel)*1000;
-    temp2 = VSP1;
-    acc1 = temp1/temp2;
+    INTCONbits.GIEH = 0;    // Disable high priority interrupts
+    E1=encode1;
+    INTCONbits.GIEH = 1;    // Enable high priority interrupts
     
-    //XXX: remove
-    //DEBUG_MSG("%ld, %ld, %ld.\r\n", (((long)VSP1) * ((long)TPR1)), ((long)(VSP1 * TPR1)), (VSP1 * TPR1));
-    //DEBUG_MSG("%d, %ld, %ld, %d.\r\n",  (VSP1 * TPR1), ((long)VSP1 * TPR1), (VSP1 * (long)TPR1), (VSP1 * (long)TPR1));
+    diffE1=E1-diffE1;
+    if(diffE1<0)
+        diffE1=0;
     
-    /*DEBUG_MSG("temp1=%ld, temp2=%ld, V1=%ld, TPR=%d, VSP1=%d, velRPM=%ld, vel1=%ld, prevVel=%ld, acc dt=%d, acc=%ld.\r\n", 
-    temp1, temp2, (long)V1, TPR1, VSP1, velRPM, vel1, prevVel, VSP1, acc1);
+    sumE1+=(long)diffE1;
+    if(sumE1<0)
+        sumE1=0;
+    
+    t+=(long)VSP1;
+    diffE1=E1;
+    
+    /* Velocity calculation scheme: We need enough samples to produce an accurate enough velocity reading.
+    If the vehicle is moving too slowly, we just won't get them. So I say to only calculate the speed
+    if we have a minimum number of new samples collected, or the timeout to get them has expired.
+    Still, we may get sudden speed readings changes, that are not a representation of the physical
+    process, i.e. the vehícle is moving relativelly steady. This may be due to several factors, 
+    such as the accelerator DAC or chain slack. So, to the actual speed acessible to the rest of the
+    software is filtered through digital recursive filter with a decay parameter, just like the
+    stock dalf firmware does for the ADC readings.
+    The properties of the encoder sensor used and its mounting make the calculation of the 
+    acceleration pretty useless, since it produces even more inaccurate readings than the speed. So
+    we are not going to use it.
     */
+    if( (sumE1 >= ROVIM_T2D_VEL1_CALC_MIN_TICK_CNT) || (t >= (6*(long)VSP1)) )
+    {
+        temp1 = sumE1 * (long)60000 ;
+        temp2 = t * TPR1 ;
+        velRPM = temp1/temp2;   //I don't feeel like fixing the rounding mistake
+        //vel (Km/10/h) = vel (RPM) * Perimeter (cm) * 3.6 /60 (s/min) / 100 (m/cm) / 10
+        temp1 = velRPM * ROVIM_T2D_WHEEL_PERIMETER * 36;
+        temp2 = 6000;
+        currVel=temp1/temp2;   //I don't feeel like fixing the rounding mistake
+        
+        
+        vel1=(currVel<<3) + (n1Vel<<2) + (n2Vel<<1) + (n3Vel<<1);
+        vel1=vel1>>4;
+        n3Vel=n2Vel;
+        n2Vel=n1Vel;
+        n1Vel = currVel;
+        
+        /* acceleration not used - for now
+        //acc(Km/10/h/s) = dV(km/h/10) / dt(ms) * 1000(ms/s)
+        temp1 = (vel1-n1Vel)*1000;
+        temp2 = t;
+        acc1 = temp1/temp2; //I don't feeel like fixing the rounding mistake*/
+        
+        debugcnt++;
+        if(debugcnt>=end)
+        {
+            debugcnt=0;
+            DEBUG_MSG("E1=%ld, V1=%ld, t=%ld, sum=%ld velRPM=%ld, vel1=%ld, n1Vel=%ld, currvel=%ld, n2Vel=%ld, n3Vel=%ld.\r\n",
+            diffE1, (long)V1, t, sumE1, velRPM, vel1, n1Vel, currVel, n2Vel, n3Vel);
+        }
+        
+        sumE1=0;
+        t=0;
+    }
+    /*t2+=(long)VSP1;
+    if(t2==60000)
+    {
+        sumE12=(long)E1-sumE12;
+        ERROR_MSG("ticks=%ld.\r\n",sumE12);
+        sumE12=E1;
+        t2=0;
+    }*/
 }
 
 void ROVIM_T2D_FullBrake(void)
@@ -1192,8 +1446,27 @@ void ROVIM_T2D_SetSpeed(BYTE speed)
     BYTE dutyCycle=0;
     long temp=0;
     
-    temp=(long)speed*12/10;  //XXX: do this properly
+    /*temp=(long)speed>>1;
+    if(temp>=SpeedToDutyCycleLen)
+    dutyCycle=SpeedToDutyCycle[temp]; //get the duty cycle from the LUT
+    temp=(long)dutyCyle*SpeedDCScaling/10; //Scale the conversion. This can be changed in real time
     dutyCycle=(BYTE) temp;
+    if (dutyCycle > 100) dutyCycle=100;*/
+    //XXX: fix this
+    
+    temp=speed*573;
+    temp=temp+27959;
+    temp=temp/1000;
+    if ((speed<ROVIM_T2D_LOWER_SPEED_LIMIT) || (temp<0))
+    {
+        temp=0;
+    }
+    if(temp>100)
+    {
+        temp=100;
+    }
+    dutyCycle=(BYTE) temp;
+    
     CMD='G';
     ARG[0]=ROVIM_T2D_ACCELERATE_CMD_CODE;
     ARG[1]=dutyCycle;
@@ -1201,38 +1474,119 @@ void ROVIM_T2D_SetSpeed(BYTE speed)
     TeCmdDispatchExt();
 }
 
+//just like in dalf, this function only indicates the PWM set by the board, 
+//it doesn't translate actual voltage fed to the motor (it may be disconnected, for example)
+BYTE ROVIM_T2D_LightPWMLed(BYTE dutyCycle, BYTE direction)
+{
+    if(dutyCycle>100)
+    {
+        WARNING_MSG("Duty cycle larger than 100 %%.\r\n");
+        dutyCycle=100;
+    }
+    if(direction>REVERSE)
+    {
+        ERROR_MSG("Unexpected direction.\r\n");
+        return eParmErr;
+    }
+    /*To control the PWM led, it seems we need to actualy use the dalf firmware to drive the PWM.
+    Since it isn't connected, there's no problem.*/
+    CMD='X';
+    ARG[0]=1;
+    ARG[1]=direction;
+    ARG[2]=dutyCycle;
+    ARGN=3;
+    TeCmdDispatchExt();
+}
+
+void    ROVIM_T2D_ServiceLED(void)        // Periodic LED service
+{
+///////////////////////////////////////////////////////////////////////////////
+//           patterns on LED1 and LED2 indicating motor status:              //
+//                                                                           //
+//  LED1                                                                     //
+//  OFF:        Motor is not good to go (maybe still be ON)                  //
+//  ON:         Motor is good to go.                                         //
+//                                                                           //
+//  LED2                                                                     //
+//  OFF:        Power=0. No Power applied. ---------------- Off              //
+//  FAST BLINK: Power>0, TGA active.  Power applied. ------- TGA Active      //
+//  SLOW BLINK: Power>0, TGA inactive, Power applied, V>0. - Open loop move. //
+//  ON:         Power>0, TGA inactive, Power applied, V=0. - Stalled.        //
+//                                                                           //
+//                 Three possible patterns on LED3                           //
+//  OFF:          No Error.                                                  //
+//  FAST BLINK:   ROVIM is in lockdown mode                                  //
+//  SLOW BLINK:   R/C signal loss (possibly transient condition)             //
+//  ON:           Low Batt (VBATT < VBWARN)                                  //
+///////////////////////////////////////////////////////////////////////////////
+
+    BYTE VB=0;
+    BYTE previousVerbosity=0;
+    
+    previousVerbosity = GetVerbosity();
+    SetVerbosity(VERBOSITY_LEVEL_ERROR | VERBOSITY_LEVEL_WARNING);
+    // Reset counter and do right shift (with wrap) on led scheduler.
+    ledshift >>= 1; if(!ledshift) ledshift = 0x80000000;
+
+    // Determine appropriate LED1 pattern
+    GetGPIO("traction voltage sensor",&VB);
+    
+    /* LED1 ON: motor is ready to go*/
+    if( (!inLockdown) && ( (movementType!=HILLHOLD) && (autoMode) ) && VB && (!SigmaDError) )
+        grn1pattern = LED_MTR_STALL;
+    /* Not used for now
+    else if ( (movementType==NEUTRAL) && (!manualMode) )
+        grn1pattern = LED_MTR_TGA;
+    else if ( ((movementType==FORWARD) || (movementType==REVERSE)) && (!manualMode) )
+        grn1pattern = LED_MTR_OPENLP;*/
+    /*LED1 OFF: some condition is preventing the led to go*/
+    else
+        grn1pattern = LED_MTR_OFF;
+
+    // Determine appropriate LED2 pattern
+    if(!Power2)                             grn2pattern = LED_MTR_OFF;
+    else if(Mtr2_Flags1 & tga_Msk)          grn2pattern = LED_MTR_TGA;
+    else if(V2)                             grn2pattern = LED_MTR_OPENLP;
+    else                                    grn2pattern = LED_MTR_STALL;
+
+    // Determine appropriate LED3 pattern
+    if(LedErr==0)                           redpattern = LED_FULLOFF;
+    else if(LedErr & Lckmsk)                redpattern = ROVIM_T2D_LED_LOCKDOWN;
+    else if(LedErr & (SL1msk) + SL2msk)     redpattern = LED_SIGNAL_LOSS;
+    else if(LedErr & VBATTmsk)              redpattern = LED_VBATT;
+
+
+    // Adjust LED's as required.
+    if(ledshift & grn1pattern) _LED1_ON; else _LED1_OFF;
+    if(ledshift & grn2pattern) _LED2_ON; else _LED2_OFF;
+    if(ledshift & redpattern)  _LED3_ON; else _LED3_OFF;
+    SetVerbosity(previousVerbosity);
+}
+
 //-----------------------------Commands accessible from the command line or I2C---------------------
 
 BYTE ROVIM_T2D_Lockdown(void)
 {
-    //XXX: temp
-    return 1;
-    
     if(UnlockingBrake)
     {
         STATUS_MSG("Aborting current emergency brake unlock.\r\n");
         inLockdown=FALSE;
+        LedErr &= ~Lckmsk;
         UnlockingBrake=FALSE;
     }
     
     if(inLockdown)
     {
-        STATUS_MSG("Already in Lockdown mode.\r\n");
-        return NoErr;
+       STATUS_MSG("Already in Lockdown mode.\r\n");
+       return NoErr;
     }
     
     STATUS_MSG("Going to lock down mode.\r\n");
     
     //Once we engage the handbrake, the traction motor (the most critical) cannot work, so we're safe
     ROVIM_T2D_LockBrake();
-    _LED3_ON;               // Visual error indication due to the brake being locked
     
     //Stop motors controlled through dalf's firmware
-    /*We're gonna try with SoftStop() now
-    //XXX: this command messes up motor control configuration. We have to put it back on releasefromlockdown
-    CMD = 'O';
-    ARGN = 0x00;
-    TeCmdDispatchExt();*/
     SoftStop(2);
     //Stop traction motor and set it to hold position
     SoftStop(3);
@@ -1240,7 +1594,8 @@ BYTE ROVIM_T2D_Lockdown(void)
     LockCriticalResourcesAccess();
     
     inLockdown=TRUE;
-    DEBUG_MSG("ROVIM now in lockdown mode. Emergency brake will finish locking and vehicle will \
+    LedErr|=Lckmsk;
+    STATUS_MSG("ROVIM now in lockdown mode. Emergency brake will finish locking and vehicle will \
 not be able to move while on this state.\r\n");
     
     return NoErr;
@@ -1267,10 +1622,43 @@ vehicle can move, consult the user manual, or activate debug messages.\r\n");
         return eErr;
     }
 
-    STATUS_MSG("Manually unclamp the emergency brake within %d ms, using the identified button on the control panel.\r\n\
-The system will become operational once it detects it is fully unclamped.\r\n", ROVIM_T2D_BRAKE_UNLOCK_TIMEOUT);
+    STATUS_MSG("Manually unclamp the emergency brake within %d ms, using the identified button \
+on the control panel.\r\n\You must press it for longer than %d ms to deactivate all safety \
+systems.\r\nThe system will become operational once it detects it is fully unclamped.\r\n", 
+ROVIM_T2D_BRAKE_UNLOCK_TIMEOUT, ROVIM_T2D_BRAKE_CLAMP_TIME);
     ROVIM_T2D_UnlockBrake();
     UnlockingBrake=TRUE;
+    
+    return NoErr;
+}
+
+BYTE ROVIM_T2D_SoftStop(void)
+{
+    BYTE mtr=0;
+
+    if (ARGN > 2)
+    {
+        return eNumArgsErr;
+    }
+    
+    if (ARGN==2)
+    {
+        mtr=ARG[1];
+        if(mtr>2)
+        {
+            ERROR_MSG("Motor number must be %d (traction) or %d (direction). If no motor is specified, all will be stopped.\r\n",1,2);
+            return eParmErr;
+        }
+        if(mtr==1) mtr=3;   //motor 1 doesn't really exist
+        SoftStop(mtr);
+        STATUS_MSG("Motor %d stopped.\r\n", mtr);
+    }
+    else
+    {
+        SoftStop(2);
+        SoftStop(3);
+        STATUS_MSG("Motors stopped.\r\n");
+    }
     
     return NoErr;
 }
@@ -1336,9 +1724,15 @@ BYTE ROVIM_T2D_Accelerate(void)
         return eParmErr;
     }
     
+    if (!autoMode)
+    {
+        ERROR_MSG("You cannot control the vehicle with the micro controller while on manual mode.\r\n");
+        return eParmErr;
+    }
+    
     AccDutyCycle=dutyCycle;
     //Used to variate PWM led of motor1, to have a visual traction power indicator.
-    Power1=AccDutyCycle;
+    ROVIM_T2D_LightPWMLed(AccDutyCycle, FORWARD);
     if (DccDutyCycle!=0)
     {
         //Wait 2*tau before starting to accelerate
@@ -1371,7 +1765,14 @@ BYTE ROVIM_T2D_Decelerate(void)
         return eParmErr;
     }
     
+    if (!autoMode)
+    {
+        ERROR_MSG("You cannot control the vehicle with the micro controller while on manual mode.\r\n");
+        return eParmErr;
+    }
+    
     DccDutyCycle=dutyCycle;
+    ROVIM_T2D_LightPWMLed(DccDutyCycle, REVERSE);
     if (AccDutyCycle!=0)
     {
         //Wait 2*tau before starting to decelerate
@@ -1430,32 +1831,45 @@ BYTE ROVIM_T2D_SetMovement(void)
         DEBUG_MSG("speed=%d, direction=%d.\r\n",speed, direction);
         return eParmErr;
     }
-    //TODO: Add closed loop speed control and remove this warning.
-    WARNING_MSG("Speed control done only in open loop currently. Check manually if the set speed matches your request.\r\n");
+    if ( (direction!=HILLHOLD) && (!autoMode) )
+    {
+        ERROR_MSG("You cannot move the vehicle with the micro controller while on manual mode.\r\n");
+        return eParmErr;
+    }
+    if ( (direction!=HILLHOLD) && (SigmaDError) )
+    {
+        ERROR_MSG("There is an error with the traction controller, or it is turned OFF. Wait %ld \
+ms after solving the error before retrying.\r\n",(long)ROVIM_T2D_SIGMAD_ERROR_TIMEOUT);
+        return eParmErr;
+    }
     
     switch(direction)
     {
         case HILLHOLD: //Hold
             SetGPIO("engage forward");
             SetGPIO("engage reverse");
-            ResetGPIO("engage handbrake");
-            //We must activate this switch, otherwise the power contactor won't arm
+            SetGPIO("engage handbrake");
             ResetGPIO("activate traction");
             
             movementType=HILLHOLD;
             desiredMovement.type=HILLHOLD;
             desiredMovement.speed=SPEEDZERO;
-            //XXX: test on the SgimaDrive if it actually stops the motorcycle once it sets the spd3
-            //ROVIM_T2D_FullBrake();
-            STATUS_MSG("Vehicle will hold position once it reaches a standstill.\r\n");
+            CMD='G';
+            ARG[0]=ROVIM_T2D_ACCELERATE_CMD_CODE;
+            ARG[1]=0;
+            ARGN=2;
+            TeCmdDispatchExt();
+            /*The trace for this case is debug, but for the others is status, because this command is
+            called from anywhere is the code to make sure the outputs are as expected. This creates
+            some unexpected messages during normal program execution. The others cases do not have this problem*/
+            DEBUG_MSG("Setting vehicle on hill hold. It will hold position once it reaches a standstill.\r\n");
             DEBUG_MSG("desired type=%d, speed=%d, current type=%d.\r\n",desiredMovement.type, desiredMovement.speed, movementType);
             break;
         case NEUTRAL: //Neutral
-            SetGPIO("engage handbrake");
+            ResetGPIO("engage handbrake");
             SetGPIO("engage forward");
             SetGPIO("engage reverse");
-            //We must activate this switch, otherwise the power contactor won't arm
-            ResetGPIO("activate traction");
+            SetGPIO("activate traction");
 
             movementType=NEUTRAL;
             desiredMovement.type=NEUTRAL;
@@ -1469,6 +1883,7 @@ BYTE ROVIM_T2D_SetMovement(void)
             DEBUG_MSG("desired type=%d, speed=%d, current type=%d.\r\n",desiredMovement.type, desiredMovement.speed, movementType);
             break;
         case FORWARD: //Forward
+            WARNING_MSG("Speed control done only in open loop currently. Check manually if the set speed matches your request.\r\n");
             desiredMovement.type=FORWARD;
             desiredMovement.speed=speed;
             if ((vel1) && (movementType!=desiredMovement.type))
@@ -1485,6 +1900,7 @@ BYTE ROVIM_T2D_SetMovement(void)
             DEBUG_MSG("desired type=%d, speed=%d, current type=%d.\r\n",desiredMovement.type, desiredMovement.speed, movementType);
             break;
         case REVERSE: //Reverse
+            WARNING_MSG("Speed control done only in open loop currently. Check manually if the set speed matches your request.\r\n");
             desiredMovement.type=REVERSE;
             desiredMovement.speed=speed;
             if ((vel1) && (movementType!=desiredMovement.type))
@@ -1511,7 +1927,7 @@ BYTE ROVIM_T2D_SetMovement(void)
 BYTE ROVIM_T2D_Turn(void)
 {
     BYTE fullAngle=0;
-    int centerAngle=0;
+    long centerAngle=0;
     short long y=0;
     long temp=0;
     
@@ -1535,40 +1951,54 @@ BYTE ROVIM_T2D_Turn(void)
     if (!vel1)
     {
         ERROR_MSG("Vehicle must be moving when turning. Set the vehicle to move and retry.\r\n");
-        WARNING_MSG("temporary override of moving limitation for testing purposes.\r\n");
-        //return eErr;
+        return eErr;
     }
     
-    centerAngle=fullAngle-(ROVIM_T2D_DIR_ANGULAR_RANGE/2);
+    if (!autoMode)
+    {
+        ERROR_MSG("You cannot move the vehicle with the micro controller while on manual mode.\r\n");
+        return eParmErr;
+    }
+    /*Since the direction range is not evenly balanced (it turns more to one side than to the other
+    we use the center angle for intermediate calculations, to get a more accurate result.
+    Also, to the user, it's the angle relative to straight line movement the most important*/
+    centerAngle=(long)ROVIM_T2D_DIR_ANGULAR_RANGE>>1;
+    centerAngle=(long)fullAngle-centerAngle;
     if (centerAngle > 0)
     {
-        STATUS_MSG("Turning vehicle %dº to starboard.\r\n",centerAngle);
+        STATUS_MSG("Turning vehicle %ldº to port (%ldº full angle).\r\n",centerAngle, (long)fullAngle);
     }
-    else if (fullAngle == 0)
+    else if (centerAngle == 0)
     {
-        STATUS_MSG("Pointing vehicle in a straight line.\r\n");
+        STATUS_MSG("Pointing vehicle in a straight line (%ldº full angle).\r\n", (long)fullAngle);
     }
     else
     {
-        STATUS_MSG("Turning vehicle %dº to port.\r\n",fullAngle);
+        STATUS_MSG("Turning vehicle %ldº to starboard (%ldº full angle).\r\n", (long)abs(centerAngle),(long)fullAngle);
     }
     
-    //We must repeat this every time because when going to lockdown this is lost
-    //I'm gonna try with the SoftStop() fct to avoid reconfiguring every time. If not, uncomment next line
-    //ROVIM_T2D_ConfigDirParamBlock();
-    temp=(long) (ROVIM_T2D_DIR_TICK_UPPER_LIMIT-ROVIM_T2D_DIR_TICK_LOWER_LIMIT)*centerAngle;
-    y=temp/ROVIM_T2D_DIR_ANGULAR_RANGE;
-    y+=ROVIM_T2D_DIR_CENTER_TICK_CNT;
+    temp=(long) (ROVIM_T2D_DIR_TICK_UPPER_LIMIT-ROVIM_T2D_DIR_TICK_LOWER_LIMIT)*centerAngle/**2*/;
+    temp=(long) temp/ROVIM_T2D_DIR_ANGULAR_RANGE/*/2*/;
+    temp=(long) temp + ROVIM_T2D_DIR_CENTER_TICK_CNT;
+    
+    if(temp<ROVIM_T2D_DIR_TICK_LOWER_LIMIT)
+    {
+       DEBUG_MSG("target position out of lower bound. This may happen if the limits are unbalanced, \
+or due to erroneous calculations. full turn angle=%ld, bound=%d.\r\n",temp, ROVIM_T2D_DIR_TICK_LOWER_LIMIT); 
+        temp=ROVIM_T2D_DIR_TICK_LOWER_LIMIT;
+    }
+    if(temp>ROVIM_T2D_DIR_TICK_UPPER_LIMIT)
+    {
+        DEBUG_MSG("target position out of upper bound. This may happen if the limits are unbalanced, \
+or due to erroneous calculations. full turn angle=%ld, bound=%d.\r\n",temp, ROVIM_T2D_DIR_TICK_UPPER_LIMIT); 
+        temp=ROVIM_T2D_DIR_TICK_UPPER_LIMIT; 
+    }
+    y=(short long) temp;
     
     DEBUG_MSG("y=%ld, temp=%ld, ang range=%d, tick range=%d, angle=%d, VMID2=%d, ACC2=%d.\r\n", 
     (long)y, (long)temp, (BYTE) ROVIM_T2D_DIR_ANGULAR_RANGE, 
     (BYTE)(ROVIM_T2D_DIR_TICK_UPPER_LIMIT-ROVIM_T2D_DIR_TICK_LOWER_LIMIT), (BYTE) centerAngle, VMID2, ACC2);
     
-    if((y<ROVIM_T2D_DIR_TICK_LOWER_LIMIT) || (y>ROVIM_T2D_DIR_TICK_UPPER_LIMIT))
-    {
-       ERROR_MSG("Unexpected error: target position not with bounds.\r\n"); 
-       return eErr;
-    }
     MoveMtrClosedLoop(2, y, VMID2, ACC2);
     
     return NoErr;
@@ -1580,7 +2010,9 @@ BYTE ROVIM_T2D_DebugControl(void)
     BYTE resetNotKick=0;
     BYTE accNotDcc=0;
     BYTE dutyCycle=0;
-    static BYTE prevVerbosity=0;
+    BYTE verbosity=0;
+    BYTE temp=0;
+    BYTE scalingFactor=0;
     
     if (ARGN < 2)
     {
@@ -1589,19 +2021,21 @@ BYTE ROVIM_T2D_DebugControl(void)
     option=ARG[1];
     switch(option)
     {
-        case 1:
-            prevVerbosity=GetVerbosity();
-            SetVerbosity(prevVerbosity | VERBOSITY_LEVEL_DEBUG);
-            //we just activated debug, so we use debug traces here
-            DEBUG_MSG("Debug traces enabled.Verbosity=%d.\r\n", (prevVerbosity | VERBOSITY_LEVEL_DEBUG));
+        case 1: //Get verbosity level
+            verbosity=GetVerbosity();
+            FATAL_ERROR_MSG("Not really an error.\r\nCurrent verbosity=%d.\r\n", verbosity);
             break;
-        case 2:
-            prevVerbosity=prevVerbosity & (~VERBOSITY_LEVEL_DEBUG);
-            SetVerbosity(prevVerbosity);
-            STATUS_MSG("Debug traces disabled.\r\n");
-            DEBUG_MSG("Verbosity=%d.\r\n", prevVerbosity);
+        case 2: //Set verbosity level
+            if(ARGN != 3)
+            {
+                ERROR_MSG("You must specify the verbosity you want to set.\r\n");
+                return eNumArgsErr;
+            }
+            verbosity=ARG[2];
+            SetVerbosity(verbosity);
+            FATAL_ERROR_MSG("Not really an error.\r\nCurrent verbosity=%d.\r\n", verbosity);
             break;
-        case 3:
+        case 3: //Toggle between automatic (default) and manual execution of the System monitoring task
             ManualSysMonitoring=~ManualSysMonitoring;
             if(ManualSysMonitoring)
             {
@@ -1613,11 +2047,18 @@ with the respective argument to run another time the T2D system monitoring task.
                 STATUS_MSG("ROVIM T2D system monitoring reverted to default (automatic).\r\n");
             }
             break;
-        case 4:
-            STATUS_MSG("Running ROVIM T2D system monitoring one time.\r\n");
-            ROVIM_T2D_MonitorSystem();
+        case 4: //run the system monitor task, if in manual mode
+            if(ManualSysMonitoring)
+            {
+                STATUS_MSG("Running ROVIM T2D system monitoring one time.\r\n");
+                ROVIM_T2D_MonitorSystem();
+            }
+            else
+            {
+                ERROR_MSG("ROVIM T2D system monitoring is not set to manual mode.\r\n");
+            }
             break;
-        case 5:
+        case 5: 
             if (ARGN == 5)
             {
                 DebugPWM=ARG[2]+1;
@@ -1638,11 +2079,16 @@ Dutycyle=%d.\r\n",(DebugPWM-1), accNotDcc, (!accNotDcc), dutyCycle);
                 STATUS_MSG("Running ROVIM T2D PWM generator debug with period count %d.\r\n",(DebugPWM-1));
                 break;
             }
+            ERROR_MSG("You have to specify the number of periods you want to see the PWM generator \
+debug info and (optional), weather you want to accelerate or decelerate and the desired duty cycle.\
+ The PWM generator is not controlled by this command, only it's debug information. You may have to\
+ activate debug traces.\r\n");
             return eNumArgsErr;
-        case 6:
+        case 6: //Control the watchdog
             #ifdef WATCHDOG_ENABLED
             if (ARGN < 3)
             {
+                ERROR_MSG("You must specify if you want to kick the watchdog or reset the system through it.\r\n");
                 return eNumArgsErr;
             }
             resetNotKick=ARG[2];
@@ -1661,6 +2107,32 @@ Dutycyle=%d.\r\n",(DebugPWM-1), accNotDcc, (!accNotDcc), dutyCycle);
             STATUS_MSG("Watchdog is disabled. Recompile.\r\n");
             break;
             #endif //WATCHDOG_ENABLED
+        case 7: //Lock/Unlock resources
+            ResourcesLockFlag=~ResourcesLockFlag;
+            STATUS_MSG("Resources Lock Flag toggled to=%d.\r\n",ResourcesLockFlag);
+            break;
+        case 8: //Calibrate speed to duty cycle conversion
+            if (ARGN == 3)
+            {
+                scalingFactor=ARG[2];
+                SpeedDCScaling=scalingFactor;
+                STATUS_MSG("Speed to duty cycle scaling factor set to %d.\r\n",(SpeedDCScaling/10) );
+                break;
+            }
+            else
+            {
+                STATUS_MSG("Current speed to duty cycle scaling factor: %d.\r\nCurrent LUT:\r\n",(SpeedDCScaling/10) );
+                /*for(i=0;i<SpeedToDutyCycleLen;i++)
+                {
+                    MSG("%d, ",SpeedToDutyCycle[i]);
+                }
+                MSG("\r\nLUT size=%d.\r\n",SpeedToDutyCycleLen);*/
+                break;
+            }
+        case 9: //Manipulate error information print control variables
+            ForcePrintMsg=TRUE;
+            STATUS_MSG("Printing errors on periodic tasks one time.\r\n");
+            break;
         default:
             ERROR_MSG("Option does not exist.\r\n");
             break;

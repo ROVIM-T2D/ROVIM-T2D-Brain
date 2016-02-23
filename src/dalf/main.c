@@ -1,4 +1,4 @@
-//#line 1 "main.c"          //work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+#line 1 "main.c"          //work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
 //cannot set breakpoints if this directive is used:
 //info: http://www.microchip.com/forums/m105540-print.aspx
 //uncomment only when breakpoints are no longer needed
@@ -108,7 +108,7 @@ BYTE    PotCtoPWM(BYTE adc);        // Map PotC position to PWM (0-100%)
 BYTE    PotFtoPWM(BYTE adc);        // Map PotF position to PWM (0-100%)
                                     // Pulse width to +/-PWM [-100, 100]
 int     RCtoPWM(WORD p, WORD rcmin, WORD rcmax, WORD rcm);
-WORD    AdcConvert(WORD Adc);       // ADC reading to millivolts
+//WORD    AdcConvert(WORD Adc);       // ADC reading to millivolts
 WORD    PulseConvert(WORD Pulse);   // PulseWidth ticks to microseconds
 WORD    AdcToVbatt(WORD v6);        // AN6 mV to Vbatt mV
 
@@ -238,7 +238,7 @@ extern  WORD    SERVICE, SERVICE_REQ;       // Requests from ISR's
 extern  BYTE    TIMESVC, TIMESVC_REQ;       // Timed requests
 //extern    BYTE    SECS, MINS, HOURS;      // RTC variables
 //extern    ULONG   Seconds;                // Seconds since boot 
-extern  BYTE    ADC0[7];                    // ADC readings AN0..AN6
+//extern  BYTE    ADC0[7];                    // ADC readings AN0..AN6
 extern  BYTE    Pkt[134];                   // Max size (API) N+6 = 128+6 = 134
 extern  WORD    DispSvc;                    // "Display" service requests
 extern  BYTE    DataReq;                    // Arg used in servicing printf
@@ -259,7 +259,7 @@ extern  WORD    npid1;                      // Motor1 PID Tuning Output count
 extern  BYTE    Mtr1_Flags1;                // Motor1 flags1
 extern  BYTE    Mtr1_Flags2;                // See dalf.h
 //extern  BYTE    S1,Power1;                  // SPD: [0..100%], [0..VMAX1%]
-extern  short long  encode1;                // Mtr1 position encoder
+//extern  short long  encode1;                // Mtr1 position encoder
 //extern  short long  V1;                   // Mtr1 Velocity
 extern  short long  x1pos;                  // Motor1 PID Target
 extern  short long  Err1;                   // Motor1 PID Err
@@ -283,7 +283,7 @@ extern  short long  ErrSum2;                // Motor2 PID Err Sum
 extern  BYTE    ReturnN;                    // Commmand Interface 
 //extern    BYTE    CmdSource;
 
-extern  BYTE    LedErr;                     // "1" bits flag err cond'n
+//extern  BYTE    LedErr;                     // "1" bits flag err cond'n
 
 extern  BYTE    xbyte;                      // printf() arg - Hex Byte
 extern  BYTE    ISR_Flags;                  // Flags set/cleared by ISR
@@ -1344,7 +1344,7 @@ void DispE(void)
     E1=encode1;
     E2=encode2;
     INTCONbits.GIEH = 1;    // Enable high priority interrupts
-
+    
     //----------------------------
     if(CmdSource == API_SrcMsk)
     { // API Mode
@@ -1482,7 +1482,7 @@ void DispV(void)
                  printf("V1: %08Hd (%5ld rpm)", V1, velRPM);
             else printf("V1: %06HX (%5ld rpm)", V1, velRPM);
             if(vel1)    //If we are in ROVIM_T2D_MODE, print additional info
-                 printf(" (%5ld Km/10/h). Acc=%5ld Km/10/h/s\r\n", vel1, acc1);
+                 printf(" (%5ld Km/10/h)\r\n", vel1);
             else printf("\r\n");
         }
         if( (DataReq==0x02) || (DataReq==0xFF) )
@@ -2444,26 +2444,19 @@ void    ServiceLED(void)        // Periodic LED service
     ledshift >>= 1; if(!ledshift) ledshift = 0x80000000;
 
     // Determine appropriate LED1 pattern
-    //TODO: figure this out
     if(!Power1)                             grn1pattern = LED_MTR_OFF;
-    //TODO: replace with dccdutycycle-no need
     else if(Mtr1_Flags1 & tga_Msk)          grn1pattern = LED_MTR_TGA;
-    //TODO: replace with accdutycycle [||]?? vel1
     else if(V1)                             grn1pattern = LED_MTR_OPENLP;
-    //TODO: replace with !inlockdown && [(!HILLHOLD && !manual)]?? && VB+ && !erroSigmaD
     else                                    grn1pattern = LED_MTR_STALL;
-    //Outras op??es: frente-tr?s
 
     // Determine appropriate LED2 pattern
     if(!Power2)                             grn2pattern = LED_MTR_OFF;
     else if(Mtr2_Flags1 & tga_Msk)          grn2pattern = LED_MTR_TGA;
     else if(V2)                             grn2pattern = LED_MTR_OPENLP;
-    //TODO: replace with !inlockdown vel1
     else                                    grn2pattern = LED_MTR_STALL;
 
     // Determine appropriate LED3 pattern
     if(LedErr==0)                           redpattern = LED_FULLOFF;
-    //TODO: replace with inlockdown
     else if(LedErr & (OC1msk + OC2msk))     redpattern = LED_OVERCURRENT;
     else if(LedErr & (SL1msk) + SL2msk)     redpattern = LED_SIGNAL_LOSS;
     else if(LedErr & VBATTmsk)              redpattern = LED_VBATT;
@@ -2708,7 +2701,15 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
     ///////////////////////////////////////////////////////////////////////////
 
     // Conditionally service on-board LED's
-    ledcount--; if(!ledcount) { ledcount=LED_PERIOD; ServiceLED(); }
+    ledcount--; if(!ledcount)
+    { 
+        ledcount=LED_PERIOD; 
+        #ifdef DALF_ROVIM_T2D
+        ROVIM_T2D_ServiceLED();
+        #else //DALF_ROVIM_T2D
+        ServiceLED();
+        #endif //DALF_ROVIM_T2D
+    }
     #ifdef DALF_ROVIM_T2D
     ROVIM_T2D_sysmonitorcount--;
     //For debug purposes, this task can be triggered by the user
@@ -2758,7 +2759,7 @@ void Svc0(void)         // TMR0: Heartbeat (1msec)
     if(TIMESVC & Vsp1Msk)   // If time to sample Motor Velocity
     {
         #ifdef DALF_ROVIM_T2D
-        ROVIM_T2D_UpdateVel1Acc1();  // Update Motor Velocity and Acceleration
+        ROVIM_T2D_UpdateVelocity1();  // Update Motor Velocity and Acceleration
         #else //DALF_ROVIM_T2D
         UpdateVelocity1();  // Update Motor Velocity
         #endif //DALF_ROVIM_T2D
@@ -3145,15 +3146,32 @@ void ISRLO (void)
 direction calculations.*/
 void INT1_ISR_SINGLE_SOURCE (void)
 {
+    volatile BYTE A=0;
+    static BYTE prevA=0;
+    
     INTCON3bits.INT1IF=0;
-    //Q: Should I actually read the port value instead of just assuming each interrupt is a pulse?
-    /*Q: Should this not be declared as volatile?
+    /*Q: Should the counter be declared as volatile?
       A: I think it can work like this, because the variable may not be optimized in it's source
       object, and will therefore behave implicitly as volatile. But this is just an assumption.
       Anyhow, I've done some light testing, and it seems qualifying the variable as volatile doesn't
       change things.
       */
-    encode1++;
+    /*change the polarity of the interrupt. Since we don't have a quadrature signal and we are
+    getting a LOT of noisy interrupts (although the input signal doesn't appear to be noisy), 
+    the readings get corrupted if we just increment the counter on each interrupt (way more 
+    interrupts than encoder pulses). However, if we set the interrupt only on the rising edge, and
+    compare the port value with the previous one, we only count the first interrupt, because after
+    that the port value will allways equal the previous one. So we need to trigger the interrupt
+    on both edges. To do that, we need to change the edge on each interrupt*/
+    INTCON2bits.INTEDG1 = ~(INTCON2bits.INTEDG1);
+    A=PORTE;
+    A&=0x04; //We only want the RE2 bit, wich corresponds to the A1 input
+    A=A>>2;
+    if((A==1) && (prevA==0))
+    {
+        encode1++;
+    }
+    prevA=A;
 }
 #endif //DALF_ROVIM_T2D
 //----------------------------------------------------------------------------

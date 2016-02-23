@@ -1,4 +1,4 @@
-//#line 1 "dalf_ext.c"          //work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
+#line 1 "dalf_ext.c"          //work around the __FILE__ screwup on windows, http://www.microchip.com/forums/m746272.aspx
 //cannot set breakpoints if this directive is used:
 //info: http://www.microchip.com/forums/m105540-print.aspx
 //uncomment only when breakpoints are no longer needed
@@ -158,8 +158,7 @@ void KickWatchdog(void)
 
 void HardReset(void)
 {
-    //wait for the watchdog to kick in
-    while(1);
+    Reset();
 }
 
 #endif
@@ -267,7 +266,56 @@ BYTE TeDisableAck(void)
 // Help submodule ----------------------------------------------------------------------------------
 BYTE ShowHelp(void)
 {
+    BYTE i=0;
+    #ifdef DALF_ROVIM_T2D
+    //temporary, quick help
+    MSG("Dalf ROVIM T2D Help.\r\nUsage: H\r\nAvailable help topics:\r\n");
+    MSG("\tC\t\t\tRead ADC.\r\n\tE\t\t\tShow encoder count.\r\n\tG[cmd code] [args...]\tCustom \
+Commands. See below.\r\n\tH\t\t\tShow this message.\r\n\tI\t\t\tReset software.\r\n\tU\t\t\tShow motor\
+ status.\r\n\tV\t\t\tShow motors velocity.\r\n\tX2 [dir] [duty cycle]\tMove direction motor in open \
+loop.\r\n[dir] can be: '0' - move to port, or '1' - move to starboard.\r\n\nCustom commands:\r\n");
+    MSG("\tG10\t\t\tGo to lockdown.\r\n");
+    MSG("\tG11\t\t\tRelease from lockdown, if the system is good to go.\r\n");
+    MSG("\tG12 [mtr]\t\tStop motor [mtr]. If [mtr] is omitted, both motors are stopped.\r\n");
+    MSG("\tG14 PWM\t\t\tSet the decelerator (braking energy recovery) to [PWM]%%.\r\n");
+    MSG("\tG15 PWM\t\t\tSet the accelerator to [PWM]%%.\r\n");
+    MSG("\tG16 type speed\t\tSet the vehicle to move in direction [type] at speed [speed].\r\n\
+Possible directions are:\r\n0 - Forward;\r\n1 - Reverse;\r\n2 - Neutral (coast);\r\n3 - Hill hold (maintain position).\r\n\
+Speed is expressed in tenths of Km/h (km/10/h) and varies between %d and %d.\r\n",0,ROVIM_T2D_MAX_SPEED);
+    MSG("\tG17 angle\t\tturn direction to [angle].\r\n\n");
+    MSG("Do not forget that all inputs through this interface are in hexadecimal and all outputs of \
+the standard commands are also in hexadecimal. All other messages and custom commands outputs are in decimal.\r\n");
+    MSG("Example usage:\r\nX2 00 30 - Moves the direction to port at 48%% of full power\r\n\
+G16 00 20 - Moves the vehicle forward at ~3.2 Km/h\r\n\G17 1B - Turn the vehicle 16º to starboard.\r\n\n");
+    MSG("GPIO pin count on Dalf board J5 and J6 expanders:\r\n(male socket seen from above)\r\n------------------\r\n|1 3 5 ....... 15|\
+\r\n|2 4 6 ....... 16|\r\n--------  --------\r\nGPIOs are:\r\n");
+    for(i=0;i<ngpios;i++)
+    {
+        if(strcmppgm("",GPIOsDescription[i].name)!=0)
+        {
+            MSG("%d - %HS\r\n",(i+1), GPIOsDescription[i].name);
+        }
+    }
+    //True beauty lies in ascii art...
+    MSG("\nDirection angle representation (motorcycle seen from above):\r\n            %dº\r\n\
+   %dº  \\---|---/ 0º\r\n          \\  |  /  \r\n           \\ | /   \r\n            \\|/\r\n        _ (FRONT) _\r\n\
+       |_|---|---|_|\r\n          |     |\r\n  (PORT)  |     |  (STARBOARD)\r\n          |     |\r\n\
+        _ |     | _\r\n       |_|-------|_|\r\n           (REAR)  \r\n\n\
+The direction angle (the argument for command G17) starts at full starboard - 0º and goes until full port - %dº.\r\n",
+ (ROVIM_T2D_DIR_ANGULAR_RANGE/2), ROVIM_T2D_DIR_ANGULAR_RANGE, ROVIM_T2D_DIR_ANGULAR_RANGE);
+    MSG("Motor 1 is the traction motor and motor 2 is the direction motor. However, motor 1 must be \
+controlled through the custom commands - motor 2 can also be controlled by the standard commands.\r\n");
+    MSG("Dalf board led blinking information:\r\nLED1 ON - traction motor is either moving or ready to move through auto mode.\r\n\
+LED1 OFF - traction motor is not ready to move with auto mode.\r\nLED2 ON or blinking - direction motor is either moving\
+ or being powered.\r\nLED2 OFF - direction motor is not being powered.\r\nLED3 OFF - No errors.\r\n\
+LED3 blinking - ROVIM is in lockdown mode.\r\nMTR1 ON green - traction motor is being accelerated\
+ on auto mode.\r\nMTR1 ON red - traction motor is being decelerated on auto mode.\r\nMTR2 ON green - direction is moving to port.\r\n\
+MTR2 ON red - direction is moving to starboard.\r\nMTR1 and MTR2 intensity depends on the PWM duty cycle.\r\n");
+    MSG("For further reference please consult the users manual.\r\n");
+    return NoErr;
+    #else
     ERROR_MSG("ShowHelp not implemented.\r\n");
+    #endif
     return eDisable;
 }
 
@@ -570,7 +618,7 @@ static BOOL GetGPIOConfigbyName(const rom char* name, IOPinConfig* config)
         //Do NOT use strncmppgm, since it requires the 3rd argument to be in rom and fails silently if it isn't correctly provided!
         if(strcmppgm(name, GPIOsDescription[i].name) == 0){
             memcpypgm2ram(config,(const rom void *) &GPIOsDescription[i].config,sizeof(*config));
-            DEBUG_MSG("GetGPIOConfigbyName: matching name found for '%HS'.\r\n", name); //%HS prints a string located in far rom
+            //DEBUG_MSG("GetGPIOConfigbyName: matching name found for '%HS'.\r\n", name); //%HS prints a string located in far rom
             return TRUE;
         }
     }
@@ -644,7 +692,7 @@ BOOL SetGPIO(const rom char* name)
     }
     else
     {
-        DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");
+        /*DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");*/
     }
     
     DEBUG_MSG("SetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%b, current \
@@ -716,7 +764,7 @@ BOOL ResetGPIO(const rom char* name)
     }
     else
     {
-        DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");
+        /*DEBUG_MSG("GPIO value already matches pretended value. No action needed.\r\n");*/
     }
 
     DEBUG_MSG("ResetGPIO: exp=J%d, pin=%d, bank %c, bank bit=%d. Previous bit value=%b, current \
