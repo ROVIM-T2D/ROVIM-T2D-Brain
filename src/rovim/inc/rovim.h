@@ -29,17 +29,12 @@
 //#include "rovim_description.h"				// Description of the project
 #include 	"rovim_t2d.h"						// Description of the T2D subsystem
 
-//System configuration profiles
-#ifdef ROVIM_CONFIG_T2D_DEVELOPMENT
-	#include "rovim_config_t2d_development.h"
-#else
-	#error No ROVIM configuration profile defined! Please define a configuration profile.
-#endif
-
+#define INIT_VERBOSITY_LEVEL 0x07   //disable call info verbosity for now, due to the issue with the #line directive
 
 //Project ID
-#define ROVIM_T2D_SW_MAJOR_ID 0
-#define ROVIM_T2D_SW_MINOR_ID 1
+#define ROVIM_T2D_SW_MAJOR_ID 1
+#define ROVIM_T2D_SW_MINOR_ID 0
+#define ROVIM_T2D_RELEASE_DATE "18-12-2015"
 #define ROVIM_T2D_CONTACTS "Goncalo Andre (programmer): goncalofr87@gmail.\
 com\r\nAntonio Serralheiro (superviser): ajserralheiro@gmail.com"
 

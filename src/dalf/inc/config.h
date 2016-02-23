@@ -24,7 +24,7 @@
 #pragma	config	BOREN = OFF			// Brown out reset Off
 #pragma	config	BORV = 0     		// Brown out reset voltage 4.5V
 #pragma	config	WDT = OFF			// Watch Dog disabled - it will be activated at run time via InitWatchdog()
-#pragma	config	WDTPS = 256   	    // Watch Dog timeout= WDTPS * 4 ms
+#pragma	config	WDTPS = 512   	    // Watch Dog timeout= WDTPS * 4 ms
 #pragma	config	MCLRE = ON			// MCLR# enabled.
 #pragma	config	LPT1OSC = OFF		// Low Power Timer1 Operation disabled.
 #pragma	config	CCP2MX = PORTE		// CCP2 on RE7

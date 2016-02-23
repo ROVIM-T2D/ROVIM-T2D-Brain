@@ -163,6 +163,8 @@ typedef struct
 
 extern  BYTE    SECS, MINS, HOURS;      // RTC variables
 extern  ULONG   Seconds;                // Seconds since boot 
+extern  BYTE    ADC0[7];                    // ADC readings AN0..AN6
+WORD    AdcConvert(WORD Adc);       // ADC reading to millivolts
 //-----------------------------------------------------------------------
 
 /* TODO: remove
@@ -403,10 +405,12 @@ void Greeting(void);
 #define LED_OVERCURRENT LED_FAST     // One or more motors overcurrent
 #define LED_SIGNAL_LOSS LED_SLOW     // One or both R/C Signal Loss.
 #define LED_VBATT       LED_FULLON   // Low VBATT
+#define ROVIM_T2D_LED_LOCKDOWN    LED_SLOW     // ROVIM is in lockdown
 
 #define LED_PERIOD  0x64                // 100 msec
 #define LED_HYSTERESIS  500             // 500 mV Vbatt Hysteresis for red LED.
 
+extern  BYTE    LedErr;                     // "1" bits flag err cond'n
 
 //////////////////////////////////////
 //  Macros for Fan and LED control  //
@@ -515,8 +519,8 @@ void Greeting(void);
 #define     triga_Msk       0x01    // Bit0 - Waiting for Closed Loop Trigger
 
 // Mtrx_Flags2 bits
-//XXX Mtrx_Flags2 uses more bits than shown here (highest value caught = 0x1E).
-//XXX Q: Should I use another flag carrier, to be sure i'm not overwritting anything?
+// Mtrx_Flags2 uses more bits than shown here (highest value caught = 0x1E).
+// Q: Should I use another flag carrier, to be sure i'm not overwritting anything?
 #define     OL_stepresp     0x80    // Bit7 - "1"=Measuring motor open loop step response
 #define     _MtrD_mask      0x20    // Bit5 - "1"=Reverse
 #define     DisableMsk      0x01    // Bit0 - "1"=Disable all Mtr commands
@@ -579,6 +583,7 @@ void Greeting(void);
 #define OC2msk      0x20        // Bit5: Over Current Mtr 2
 #define SL1msk      0x10        // Bit4: R/C SignalLoss Mtr1
 #define SL2msk      0x08        // Bit3: R/C SignalLoss Mtr2
+#define Lckmsk      0x04        // Bit2: ROVIM is in Lockdown
 
 
 // Motor Equates
@@ -631,7 +636,8 @@ extern  BYTE    CMD,ARG[16],ARGN;           // parsed command info
 extern  BYTE    SCFG;                       // Serial Configuration (1..3)
 extern  BYTE    Mtr2_Flags2;                // Motor2 flags2
 extern  BYTE    Mtr2_Flags1;                // Motor2 flags1
-extern  short long  V1;                     // Mtr1 Velocity
+extern  short long  encode1;                // Mtr1 position encoder
+extern  short long  V1;                   // Mtr1 Velocity
 extern  short long  V2;                     // Mtr2 Velocity
 extern BYTE MTR2_MODE1, MTR2_MODE2, MTR2_MODE3;
 extern BYTE VMIN1, VMAX1;
@@ -642,6 +648,12 @@ extern WORD ACC2, VMID2;
 extern  BYTE    S2,Power2;                  // SPD: [0..100%], [0..VMAX2%]
 extern  BYTE    S1,Power1;                  // SPD: [0..100%], [0..VMAX1%]
 extern  BYTE    CmdSource;
+
+// LED variables
+extern ULONG   ledshift;       // On/Off LED bit shifter (shifted bit is time period)
+extern ULONG   grn1pattern;    // LED1: On/Off LED bit pattern
+extern ULONG   grn2pattern;    // LED2: On/Off LED bit pattern 
+extern ULONG   redpattern;     // LED3: On/Off LED bit pattern
 
 #define TIME_TO_MSEC(x) ((x.secs*1000) + (x.ticks>>5))
 
